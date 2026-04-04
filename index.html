@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>チラシ価格トラッカー | 近所の最安値を一目で</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700;900&family=Noto+Sans+JP:wght@300;400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    /* 設定パネル折りたたみ */
+    .setup-body { overflow: hidden; transition: max-height 0.35s ease, opacity 0.3s ease; }
+    .setup-panel.collapsed .setup-body { max-height: 0 !important; opacity: 0; pointer-events: none; }
+    .setup-panel:not(.collapsed) .setup-body { opacity: 1; }
+    .toggle-arrow { transition: transform 0.3s ease; display: inline-block; }
+    .setup-panel.collapsed .toggle-arrow { transform: rotate(180deg); }
+  </style>
+</head>
+<body>
+
+  <!-- ヘッダー -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">🛒</span>
+        <div class="logo-text">
+          <span class="logo-main">チラシ価格トラッカー</span>
+          <span class="logo-sub">近所の最安値をリアルタイム比較</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn-sheet" id="btnOpenSheet" title="Googleスプレッドシートを開く">
+          <span>📊</span> 価格履歴
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- メインコンテンツ -->
+  <main class="main">
+
+    <!-- 設定パネル -->
+    <section class="setup-panel collapsed" id="setupPanel">
+      <div class="panel-card">
+        <button class="panel-header-btn" id="btnToggleSetup" aria-expanded="false">
+          <span>⚙️ 初期設定</span>
+          <span class="toggle-arrow">▲</span>
+        </button>
+        <div class="setup-body" id="setupBody" style="max-height:0">
+          <p class="panel-desc">初回のみ設定が必要です。設定はブラウザに保存されます。</p>
+          <div class="setup-grid">
+            <div class="form-group">
+              <label>Google Apps Script Web App URL</label>
+              <input type="text" id="gasUrl" placeholder="https://script.google.com/macros/s/..." class="input-field">
+              <span class="hint">チラシスクレイピング＆シート保存に使用します</span>
+            </div>
+            <div class="form-group">
+              <label>Googleスプレッドシート URL（任意）</label>
+              <input type="text" id="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/..." class="input-field">
+              <span class="hint">価格履歴ボタンのリンク先</span>
+            </div>
+          </div>
+          <div class="setup-actions">
+            <button class="btn-primary" id="btnSaveConfig">💾 設定を保存</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 検索エリア -->
+    <section class="search-section">
+      <div class="search-card">
+        <h2 class="search-title">📍 住所を入力して近くのスーパーを探す</h2>
+        <div class="search-row">
+          <input type="text" id="addressInput" placeholder="例: 栃木県佐野市高砂町..." class="input-field search-input">
+          <button class="btn-primary" id="btnSearchStores">🔍 スーパーを探す</button>
+        </div>
+        <p class="search-hint">※ デモモードでは入力住所をもとにサンプルのお店を表示します</p>
+      </div>
+    </section>
+
+    <!-- スーパー一覧 -->
+    <section class="stores-section" id="storesSection" style="display:none">
+      <div class="section-header">
+        <h2>🏪 近くのスーパー <span id="storeCount" class="count-badge">0</span></h2>
+        <div class="header-controls">
+          <button class="btn-select-all" id="btnSelectAll">全選択</button>
+          <button class="btn-primary collect-btn" id="btnCollectPrices">
+            <span class="btn-icon">⚡</span> チラシ情報を収集する
+          </button>
+        </div>
+      </div>
+      <div class="stores-grid" id="storesGrid"></div>
+    </section>
+
+    <!-- 収集中インジケーター -->
+    <div class="collecting-overlay" id="collectingOverlay" style="display:none">
+      <div class="collecting-card">
+        <div class="spinner-ring"></div>
+        <p class="collecting-title">チラシ情報を収集中...</p>
+        <p class="collecting-store" id="collectingStoreName">準備中</p>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar" id="progressBar" style="width:0%"></div>
+        </div>
+        <p class="progress-text" id="progressText">0 / 0</p>
+      </div>
+    </div>
+
+    <!-- 価格比較結果 -->
+    <section class="results-section" id="resultsSection" style="display:none">
+      <div class="results-header">
+        <h2>💰 価格比較結果</h2>
+        <div class="results-meta">
+          <span id="resultDate" class="result-date"></span>
+          <button class="btn-export" id="btnExportSheet">📊 スプレッドシートに保存</button>
+          <button class="btn-secondary small" id="btnReCollect">🔄 再収集</button>
+        </div>
+      </div>
+
+      <!-- カテゴリタブ -->
+      <div class="category-tabs" id="categoryTabs"></div>
+
+      <!-- 最安値ハイライト -->
+      <div class="best-deal-section" id="bestDealSection"></div>
+
+      <!-- 価格テーブル -->
+      <div class="table-wrap">
+        <table class="price-table" id="priceTable">
+          <thead id="priceTableHead"></thead>
+          <tbody id="priceTableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- スプレッドシート保存ステータス -->
+      <div class="save-status" id="saveStatus" style="display:none"></div>
+    </section>
+
+    <!-- 空状態 -->
+    <div class="empty-state" id="emptyState">
+      <div class="empty-illustration">🛍️</div>
+      <h3>住所を入力してスーパーを探しましょう</h3>
+      <p>近くのスーパーのチラシ情報を自動収集し、最安値を比較します</p>
+    </div>
+
+  </main>
+
+  <!-- トースト通知 -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/scraper.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
