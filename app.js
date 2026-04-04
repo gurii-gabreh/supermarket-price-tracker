@@ -9,83 +9,101 @@ const App = {
 
   init() {
     UI.initSetupPanel();
-    this._initEventListeners();
-    this._updateSheetButton();
+    this._bindEvents();
+
+    // 価格履歴ボタン初期表示
+    const sheetUrl = Config.get('sheetUrl');
+    document.getElementById('btnOpenSheet').style.display = sheetUrl ? 'flex' : 'none';
   },
 
-  _initEventListeners() {
-    // スーパー検索
+  _bindEvents() {
+    // 検索
     document.getElementById('btnSearchStores').addEventListener('click', () => this.searchStores());
     document.getElementById('addressInput').addEventListener('keydown', e => {
       if (e.key === 'Enter') this.searchStores();
+    });
+    // 検索ボックスのフォーカスアニメ
+    document.getElementById('addressInput').addEventListener('focus', () => {
+      document.getElementById('searchField').style.borderColor = 'var(--lime)';
+    });
+    document.getElementById('addressInput').addEventListener('blur', () => {
+      document.getElementById('searchField').style.borderColor = '';
     });
 
     // 全選択
     document.getElementById('btnSelectAll').addEventListener('click', () => UI.selectAllStores());
 
-    // 価格収集
+    // 収集
     document.getElementById('btnCollectPrices').addEventListener('click', () => this.collectPrices());
     document.getElementById('btnReCollect').addEventListener('click', () => this.collectPrices());
 
-    // スプレッドシート保存・表示
+    // シート保存・表示
     document.getElementById('btnExportSheet').addEventListener('click', () => this.exportToSheet());
     document.getElementById('btnOpenSheet').addEventListener('click', () => {
       const url = Config.get('sheetUrl');
       if (url) window.open(url, '_blank');
-      else UI.toast('設定でGoogleスプレッドシートのURLを入力してください', 'info');
+      else UI.toast('設定でスプレッドシートURLを入力してください', 'info');
     });
   },
 
-  _updateSheetButton() {
-    const btn = document.getElementById('btnOpenSheet');
-    btn.style.display = Config.get('sheetUrl') ? 'flex' : 'none';
-  },
-
-  // ── スーパーを検索（住所テキストベース） ──
+  // ── スーパー検索（住所テキストから） ──
   async searchStores() {
     const address = document.getElementById('addressInput').value.trim();
-    if (!address) { UI.toast('住所を入力してください', 'error'); return; }
+    if (!address) {
+      UI.toast('住所を入力してください', 'error');
+      // 入力欄を揺らすアニメ
+      const field = document.getElementById('searchField');
+      field.style.animation = 'none';
+      field.offsetHeight;
+      field.style.animation = 'shake 0.4s ease';
+      return;
+    }
 
     const btn = document.getElementById('btnSearchStores');
     btn.disabled = true;
-    btn.textContent = '🔍 検索中...';
+    btn.innerHTML = '<span style="opacity:.6">検索中...</span>';
 
     try {
       const gasUrl = Config.get('gasUrl');
+      let stores;
 
       if (gasUrl) {
         // 本番: GASでスーパー検索
         const params = new URLSearchParams({ action: 'findStores', address });
         const res = await fetch(`${gasUrl}?${params}`);
-        if (!res.ok) throw new Error(`GASリクエスト失敗: ${res.status}`);
+        if (!res.ok) throw new Error(`通信エラー: ${res.status}`);
         const data = await res.json();
         if (data.error) throw new Error(data.error);
-        this.currentStores = data.stores || [];
+        stores = data.stores || [];
+        UI.renderStores(stores, false);
       } else {
-        // デモモード: サンプルスーパーを生成
-        await new Promise(r => setTimeout(r, 500));
-        this.currentStores = this._getDemoStores(address);
+        // デモモード
+        await new Promise(r => setTimeout(r, 600));
+        stores = this._demoStores(address);
+        UI.renderStores(stores, true);
       }
 
-      UI.renderStores(this.currentStores, !gasUrl);
-      if (this.currentStores.length > 0) {
-        UI.toast(`${this.currentStores.length}件のスーパーが見つかりました！`, 'success');
-        // 住所入力欄の直下にスーパー一覧が表示されるようスクロール
+      this.currentStores = stores;
+
+      if (stores.length > 0) {
+        UI.toast(`${stores.length}件のスーパーが見つかりました`, 'success');
         setTimeout(() => {
-          document.getElementById('storesSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+          document.getElementById('storesSection')
+            .scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 100);
       } else {
-        UI.toast('スーパーが見つかりませんでした', 'info');
+        UI.toast('この住所付近にスーパーが見つかりませんでした', 'info');
       }
     } catch (e) {
       UI.toast(`エラー: ${e.message}`, 'error');
+      console.error(e);
     } finally {
       btn.disabled = false;
-      btn.textContent = '🔍 スーパーを探す';
+      btn.innerHTML = 'スーパーを探す <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
     }
   },
 
-  // ── チラシ情報を収集 ──
+  // ── チラシ収集 ──
   async collectPrices() {
     const selectedIds = [...UI.selectedStores];
     if (selectedIds.length === 0) {
@@ -93,99 +111,106 @@ const App = {
       return;
     }
 
-    const selectedStores = this.currentStores.filter(s => selectedIds.includes(s.id));
+    const selected = this.currentStores.filter(s => selectedIds.includes(s.id));
     const btn = document.getElementById('btnCollectPrices');
     btn.disabled = true;
-    UI.showCollecting(selectedStores.length);
 
-    const storeResults = [];
+    UI.showCollecting(selected.length);
     this.collectedAt = new Date().toISOString();
-    const gasUrl = Config.get('gasUrl');
+    const results = [];
+    const gasUrl  = Config.get('gasUrl');
 
-    for (let i = 0; i < selectedStores.length; i++) {
-      const store = selectedStores[i];
-      UI.updateCollectingProgress(store.name, i, selectedStores.length);
+    for (let i = 0; i < selected.length; i++) {
+      const store = selected[i];
+      UI.updateCollectingProgress(store.name, i, selected.length);
       try {
         const items = gasUrl
           ? await Scraper.fetchStorePrices(store)
           : await this._demoFetch(store);
-        storeResults.push({ store, items });
+        results.push({ store, items });
       } catch (e) {
-        console.error(`${store.name} 収集エラー:`, e);
-        UI.toast(`${store.name}: 収集に失敗しました`, 'error');
-        storeResults.push({ store, items: [] });
+        console.error(store.name, e);
+        UI.toast(`${store.name}: 収集失敗`, 'error');
+        results.push({ store, items: [] });
       }
     }
 
-    UI.updateCollectingProgress('完了', selectedStores.length, selectedStores.length);
+    UI.updateCollectingProgress('完了', selected.length, selected.length);
     await new Promise(r => setTimeout(r, 400));
     UI.hideCollecting();
 
-    const mergedItems = Scraper.mergeAllPrices(storeResults);
-    this.collectedData = mergedItems;
-    this.collectedStores = selectedStores;
+    const merged = Scraper.mergeAllPrices(results);
+    this.collectedData   = merged;
+    this.collectedStores = selected;
 
-    UI.renderResults(mergedItems, selectedStores, this.collectedAt);
+    UI.renderResults(merged, selected, this.collectedAt);
     btn.disabled = false;
 
-    UI.toast(`✨ ${mergedItems.length}品目の価格情報を収集しました！${gasUrl ? '' : ' (デモ)'}`, 'success', 5000);
+    UI.toast(`${merged.length}品目の価格を収集しました${gasUrl ? '' : '（デモ）'}`, 'success', 5000);
     setTimeout(() => {
       document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 200);
   },
 
   async _demoFetch(store) {
-    await new Promise(r => setTimeout(r, 500 + Math.random() * 700));
+    await new Promise(r => setTimeout(r, 400 + Math.random() * 700));
     return Scraper.generateDemoData(store);
   },
 
-  // ── スプレッドシートにエクスポート ──
+  // ── スプレッドシート保存 ──
   async exportToSheet() {
     if (!Config.get('gasUrl')) {
-      UI.toast('設定でGoogle Apps Script URLを入力してください', 'error');
+      UI.toast('設定でGAS URLを入力してください', 'error');
       return;
     }
     if (!this.collectedData?.length) {
-      UI.toast('先にチラシ情報を収集してください', 'error');
+      UI.toast('先にチラシ収集を実行してください', 'error');
       return;
     }
 
     const btn = document.getElementById('btnExportSheet');
     btn.disabled = true;
-    btn.textContent = '⏳ 保存中...';
+    btn.textContent = '保存中...';
 
     try {
       await Scraper.saveToSheet(this.collectedData, this.collectedStores, this.collectedAt);
-      UI.showSaveStatus(true, '✅ Googleスプレッドシートに保存しました！価格履歴ボタンで確認できます。');
-      UI.toast('スプレッドシートに保存しました！', 'success');
-      this._updateSheetButton();
+      UI.showSaveStatus(true, '✓ Googleスプレッドシートに保存しました');
+      UI.toast('スプレッドシートに保存しました', 'success');
     } catch (e) {
-      UI.showSaveStatus(false, `❌ 保存に失敗しました: ${e.message}`);
-      UI.toast(`保存エラー: ${e.message}`, 'error');
+      UI.showSaveStatus(false, `✕ 保存に失敗しました: ${e.message}`);
+      UI.toast('保存に失敗しました', 'error');
     } finally {
       btn.disabled = false;
-      btn.textContent = '📊 スプレッドシートに保存';
+      btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> シートに保存';
     }
   },
 
-  // ── デモ用サンプルスーパー生成 ──
-  _getDemoStores(address) {
-    const names = [
-      'ベルク', 'カスミ', 'マルエツ', 'ヤオコー', 'コープ',
-      'イオン', 'ライフ', 'オーケー', 'ロピア', 'サミット'
+  // ── デモ用スーパー生成 ──
+  _demoStores(address) {
+    const list = [
+      'ベルク','カスミ','マルエツ','ヤオコー','コープみらい',
+      'イオン','ライフ','オーケー','ロピア','サミット'
     ];
-    const suffixes = ['店', 'フードセンター', 'スーパー'];
     const count = 5 + Math.floor(Math.random() * 4);
     return Array.from({ length: count }, (_, i) => ({
       id: `demo_${i}`,
-      name: `${names[i % names.length]}${suffixes[i % suffixes.length]}`,
+      name: list[i % list.length] + ['店','フードセンター','マーケット'][i % 3],
       address: `${address} ${i + 1}丁目付近`,
       distance: parseFloat((0.2 + Math.random() * 2.8).toFixed(1)),
-      rating: parseFloat((3.2 + Math.random() * 1.5).toFixed(1)),
-      openNow: Math.random() > 0.2,
-      website: null,
+      rating:   parseFloat((3.0 + Math.random() * 1.8).toFixed(1)),
+      openNow:  Math.random() > 0.2,
+      website:  null,
     })).sort((a, b) => a.distance - b.distance);
   },
 };
+
+// shakeアニメ定義
+const style = document.createElement('style');
+style.textContent = `@keyframes shake {
+  0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)}
+  40%{transform:translateX(6px)} 60%{transform:translateX(-4px)}
+  80%{transform:translateX(4px)}
+}`;
+document.head.appendChild(style);
 
 document.addEventListener('DOMContentLoaded', () => App.init());
