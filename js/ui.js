@@ -5,6 +5,8 @@
 const UI = {
   selectedStores: new Set(),
   currentCategory: 'all',
+  currentViewMode: 'ranking',   // 'ranking' | 'discount' | 'byStore'
+  currentStoreFilter: null,     // byStoreモード時の選択店舗ID
   mergedItems: [],
   allStores: [],
   sortColumn: 'name',
@@ -27,26 +29,16 @@ const UI = {
     if (cfg.sheetUrl) document.getElementById('sheetUrl').value = cfg.sheetUrl;
 
     const overlay = document.getElementById('settingsOverlay');
+    document.getElementById('btnToggleSetup').addEventListener('click', () => { overlay.style.display = 'flex'; });
+    document.getElementById('drawerClose').addEventListener('click', () => { overlay.style.display = 'none'; });
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
 
-    // 開閉
-    document.getElementById('btnToggleSetup').addEventListener('click', () => {
-      overlay.style.display = 'flex';
-    });
-    document.getElementById('drawerClose').addEventListener('click', () => {
-      overlay.style.display = 'none';
-    });
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) overlay.style.display = 'none';
-    });
-
-    // 保存
     document.getElementById('btnSaveConfig').addEventListener('click', () => {
       const gasUrl   = document.getElementById('gasUrl').value.trim();
       const sheetUrl = document.getElementById('sheetUrl').value.trim();
       Config.save({ gasUrl, sheetUrl });
       this.toast('設定を保存しました', 'success');
       overlay.style.display = 'none';
-      // 価格履歴ボタン表示更新
       document.getElementById('btnOpenSheet').style.display = sheetUrl ? 'flex' : 'none';
     });
   },
@@ -82,16 +74,11 @@ const UI = {
       card.className = 'store-card';
       card.dataset.id = store.id;
 
-      const openTag = store.openNow === true
-        ? '<span class="store-tag open">営業中</span>'
-        : store.openNow === false
-          ? '<span class="store-tag closed">閉店中</span>'
-          : '';
-      const distTag = store.distance != null
-        ? `<span class="store-tag">${store.distance < 1 ? Math.round(store.distance * 1000) + 'm' : store.distance.toFixed(1) + 'km'}</span>`
-        : '';
-      const ratingTag = store.rating
-        ? `<span class="store-tag">★ ${store.rating}</span>` : '';
+      const openTag   = store.openNow === true  ? '<span class="store-tag open">営業中</span>'
+                      : store.openNow === false ? '<span class="store-tag closed">閉店中</span>' : '';
+      const distTag   = store.distance != null
+        ? `<span class="store-tag">${store.distance < 1 ? Math.round(store.distance*1000)+'m' : store.distance.toFixed(1)+'km'}</span>` : '';
+      const ratingTag = store.rating ? `<span class="store-tag">★ ${store.rating}</span>` : '';
 
       card.innerHTML = `
         <div class="store-check">✓</div>
@@ -103,7 +90,6 @@ const UI = {
       grid.appendChild(card);
     });
 
-    // デフォルト全選択
     stores.forEach(s => {
       const card = grid.querySelector(`[data-id="${s.id}"]`);
       if (card) this._toggleStore(s.id, card);
@@ -112,11 +98,9 @@ const UI = {
 
   _toggleStore(id, card) {
     if (this.selectedStores.has(id)) {
-      this.selectedStores.delete(id);
-      card?.classList.remove('selected');
+      this.selectedStores.delete(id); card?.classList.remove('selected');
     } else {
-      this.selectedStores.add(id);
-      card?.classList.add('selected');
+      this.selectedStores.add(id);   card?.classList.add('selected');
     }
   },
 
@@ -138,31 +122,34 @@ const UI = {
   },
   updateCollectingProgress(name, current, total) {
     document.getElementById('collectingStoreName').textContent = name;
-    document.getElementById('progressBar').style.width = `${Math.round(current / total * 100)}%`;
+    document.getElementById('progressBar').style.width = `${Math.round(current/total*100)}%`;
     document.getElementById('progressText').textContent = `${current} / ${total}`;
   },
   hideCollecting() {
     document.getElementById('collectingOverlay').style.display = 'none';
   },
 
-  // ── 結果レンダリング ──
+  // ── 結果レンダリング（メイン） ──
   renderResults(items, stores, collectedAt) {
     this.mergedItems = items;
     this.allStores   = stores;
+    this.currentViewMode   = 'ranking';
+    this.currentCategory   = 'all';
+    this.currentStoreFilter = stores[0]?.id || null;
 
-    const section = document.getElementById('resultsSection');
-    section.style.display = 'block';
+    document.getElementById('resultsSection').style.display = 'block';
     document.getElementById('resultDate').textContent =
       new Date(collectedAt).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
 
     this._renderRanking(items, stores);
-    this._renderTabs(items);
-    this._renderTable(items, stores);
+    this._renderViewModeTabs(items, stores);
+    this._renderCurrentView();
   },
 
+  // ── 最安値ランキングカード ──
   _renderRanking(items, stores) {
-    const medals = ['🥇','🥈','🥉','🏅'];
-    const scores = stores.map(s => {
+    const medals  = ['🥇','🥈','🥉','🏅'];
+    const scores  = stores.map(s => {
       let wins = 0, savings = 0;
       items.forEach(item => {
         if (item.minStoreId === s.id) {
@@ -189,10 +176,42 @@ const UI = {
     });
   },
 
-  _renderTabs(items) {
+  // ── 表示モードタブ ──
+  _renderViewModeTabs(items, stores) {
+    const tabsEl = document.getElementById('categoryTabs');
+    tabsEl.innerHTML = '';
+
+    // ── 表示モード切り替えボタン ──
+    const modes = [
+      { key: 'ranking',  label: '🏆 最安値ランキング表' },
+      { key: 'discount', label: '🔥 値引き率が高い順' },
+      { key: 'byStore',  label: '🏪 スーパー別最安値' },
+    ];
+
+    const modeRow = document.createElement('div');
+    modeRow.className = 'mode-row';
+
+    modes.forEach(m => {
+      const btn = document.createElement('button');
+      btn.className = 'mode-tab' + (m.key === this.currentViewMode ? ' active' : '');
+      btn.textContent = m.label;
+      btn.addEventListener('click', () => {
+        this.currentViewMode = m.key;
+        modeRow.querySelectorAll('.mode-tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this._renderCurrentView();
+      });
+      modeRow.appendChild(btn);
+    });
+
+    tabsEl.appendChild(modeRow);
+
+    // ── カテゴリフィルター（ranking/discountモード用） ──
     const cats = ['すべて', ...[...new Set(items.map(i => i.category))]];
-    const el   = document.getElementById('categoryTabs');
-    el.innerHTML = '';
+    const catRow = document.createElement('div');
+    catRow.className = 'cat-row';
+    catRow.id = 'catRow';
+
     cats.forEach(cat => {
       const key   = cat === 'すべて' ? 'all' : cat;
       const count = cat === 'すべて' ? items.length : items.filter(i => i.category === cat).length;
@@ -201,50 +220,99 @@ const UI = {
       btn.textContent = `${cat} ${count}`;
       btn.addEventListener('click', () => {
         this.currentCategory = key;
-        document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+        catRow.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        this._renderTable(this.mergedItems, this.allStores);
+        this._renderCurrentView();
       });
-      el.appendChild(btn);
+      catRow.appendChild(btn);
     });
+
+    tabsEl.appendChild(catRow);
+
+    // ── スーパー選択（byStoreモード用） ──
+    const storeRow = document.createElement('div');
+    storeRow.className = 'store-filter-row';
+    storeRow.id = 'storeFilterRow';
+    storeRow.style.display = 'none';
+
+    stores.forEach(s => {
+      const btn = document.createElement('button');
+      btn.className = 'store-filter-btn' + (s.id === this.currentStoreFilter ? ' active' : '');
+      btn.textContent = s.name;
+      btn.dataset.storeId = s.id;
+      btn.addEventListener('click', () => {
+        this.currentStoreFilter = s.id;
+        storeRow.querySelectorAll('.store-filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this._renderCurrentView();
+      });
+      storeRow.appendChild(btn);
+    });
+
+    tabsEl.appendChild(storeRow);
   },
 
-  _renderTable(allItems, stores) {
+  // ── 現在のモードに応じた描画 ──
+  _renderCurrentView() {
+    const catRow      = document.getElementById('catRow');
+    const storeRow    = document.getElementById('storeFilterRow');
+    const tableWrap   = document.querySelector('.table-container');
+
+    if (this.currentViewMode === 'ranking') {
+      catRow.style.display   = 'flex';
+      storeRow.style.display = 'none';
+      this._renderRankingTable(this.mergedItems, this.allStores);
+    } else if (this.currentViewMode === 'discount') {
+      catRow.style.display   = 'flex';
+      storeRow.style.display = 'none';
+      this._renderDiscountTable(this.mergedItems);
+    } else if (this.currentViewMode === 'byStore') {
+      catRow.style.display   = 'none';
+      storeRow.style.display = 'flex';
+      this._renderByStoreTable(this.mergedItems, this.allStores);
+    }
+  },
+
+  // ══════════════════════════════════════
+  // モード1: 最安値ランキング表
+  // 横軸 = 1位・2位・3位（スーパー名併記）
+  // ══════════════════════════════════════
+  _renderRankingTable(allItems, stores) {
     const items = this.currentCategory === 'all'
       ? allItems : allItems.filter(i => i.category === this.currentCategory);
 
-    // ヘッダー
     const thead = document.getElementById('priceTableHead');
-    thead.innerHTML = `<tr>
-      <th class="sortable" data-col="name">商品名</th>
-      ${stores.map(s => `<th class="sortable" data-col="store_${s.id}" style="text-align:right">${this._e(s.name)}</th>`).join('')}
-      <th class="sortable" data-col="minPrice" style="text-align:right">最安値</th>
-    </tr>`;
-    thead.querySelectorAll('.sortable').forEach(th => {
-      th.addEventListener('click', () => {
-        const col = th.dataset.col;
-        this.sortAsc = this.sortColumn === col ? !this.sortAsc : true;
-        this.sortColumn = col;
-        this._renderTable(allItems, stores);
-      });
-    });
+    const tbody = document.getElementById('priceTableBody');
 
-    // ボディ
-    const sorted = this._sort([...items], stores);
-    const tbody  = document.getElementById('priceTableBody');
+    // 最大3位まで
+    const RANK = 3;
+    const rankLabels = ['🥇 1位', '🥈 2位', '🥉 3位'];
+
+    thead.innerHTML = `<tr>
+      <th>商品名</th>
+      ${rankLabels.map(l => `<th style="text-align:right">${l}</th>`).join('')}
+    </tr>`;
+
     tbody.innerHTML = '';
 
-    sorted.forEach(item => {
+    items.forEach(item => {
+      // 価格を安い順にソート
+      const ranked = Object.entries(item.stores)
+        .map(([storeId, d]) => ({ storeId, ...d, store: stores.find(s => s.id === storeId) }))
+        .filter(d => d.store)
+        .sort((a, b) => a.price - b.price);
+
       const tr = document.createElement('tr');
-      const priceCells = stores.map(s => {
-        const d = item.stores[s.id];
+      const rankCells = rankLabels.map((_, i) => {
+        const d = ranked[i];
         if (!d) return `<td class="price-cell"><span class="price-none">—</span></td>`;
-        const isBest = s.id === item.minStoreId;
-        const orig   = d.originalPrice
-          ? `<span style="text-decoration:line-through;font-size:11px;color:var(--text3);margin-right:3px">¥${d.originalPrice.toLocaleString()}</span>` : '';
-        const sale   = d.isSale ? '<span class="sale-badge">SALE</span>' : '';
+        const orig = d.originalPrice
+          ? `<span style="text-decoration:line-through;font-size:11px;color:var(--text3)">¥${d.originalPrice.toLocaleString()}</span> ` : '';
+        const sale = d.isSale ? '<span class="sale-badge">SALE</span>' : '';
+        const cls  = i === 0 ? 'best' : d.isSale ? 'sale' : 'normal';
         return `<td class="price-cell">
-          ${orig}<span class="price-tag ${isBest ? 'best' : d.isSale ? 'sale' : 'normal'}">¥${d.price.toLocaleString()}</span>${sale}
+          <div>${orig}<span class="price-tag ${cls}">¥${d.price.toLocaleString()}</span>${sale}</div>
+          <div class="rank-store-name">${this._e(d.store.name)}</div>
         </td>`;
       }).join('');
 
@@ -253,34 +321,165 @@ const UI = {
           <div class="item-name">${this._e(item.name)}</div>
           <span class="item-cat">${this._e(item.category)}</span>
         </td>
-        ${priceCells}
-        <td class="price-cell">
-          ${item.minPrice != null
-            ? `<span class="price-tag best">¥${item.minPrice.toLocaleString()}</span>`
-            : '<span class="price-none">—</span>'}
-        </td>
+        ${rankCells}
       `;
       tbody.appendChild(tr);
     });
 
-    if (sorted.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="99" style="text-align:center;padding:32px;color:var(--text3);font-size:14px">データがありません</td></tr>`;
+    if (items.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--text3)">データがありません</td></tr>`;
     }
   },
 
-  _sort(items, stores) {
-    return items.sort((a, b) => {
-      let av, bv;
-      if      (this.sortColumn === 'name')     { av = a.name;     bv = b.name; }
-      else if (this.sortColumn === 'minPrice') { av = a.minPrice ?? Infinity; bv = b.minPrice ?? Infinity; }
-      else if (this.sortColumn.startsWith('store_')) {
-        const sid = this.sortColumn.replace('store_', '');
-        av = a.stores[sid]?.price ?? Infinity;
-        bv = b.stores[sid]?.price ?? Infinity;
+  // ══════════════════════════════════════
+  // モード2: 値引き率が高い順
+  // 全商品を値引き額・率でフラットに並べる
+  // ══════════════════════════════════════
+  _renderDiscountTable(allItems) {
+    const items = this.currentCategory === 'all'
+      ? allItems : allItems.filter(i => i.category === this.currentCategory);
+
+    // 全店舗×全商品の「値引きあり」エントリをフラット化
+    const discountRows = [];
+    items.forEach(item => {
+      Object.entries(item.stores).forEach(([storeId, d]) => {
+        if (d.originalPrice && d.originalPrice > d.price) {
+          const saving    = d.originalPrice - d.price;
+          const savingPct = Math.round(saving / d.originalPrice * 100);
+          const store     = this.allStores.find(s => s.id === storeId);
+          if (store) {
+            discountRows.push({
+              itemName: item.name,
+              category: item.category,
+              storeName: store.name,
+              price: d.price,
+              originalPrice: d.originalPrice,
+              saving,
+              savingPct,
+            });
+          }
+        }
+      });
+    });
+
+    // 値引き額の高い順にソート
+    discountRows.sort((a, b) => b.saving - a.saving);
+
+    const thead = document.getElementById('priceTableHead');
+    const tbody = document.getElementById('priceTableBody');
+
+    thead.innerHTML = `<tr>
+      <th>商品名</th>
+      <th>スーパー</th>
+      <th style="text-align:right">元値</th>
+      <th style="text-align:right">特売価格</th>
+      <th style="text-align:right">値引き額</th>
+      <th style="text-align:right">値引き率</th>
+    </tr>`;
+
+    tbody.innerHTML = '';
+
+    if (discountRows.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text3)">
+        値引き情報がありません（SALEタグ付きの商品のみ表示されます）
+      </td></tr>`;
+      return;
+    }
+
+    discountRows.forEach((row, i) => {
+      const tr = document.createElement('tr');
+      const medal = i === 0 ? '🥇 ' : i === 1 ? '🥈 ' : i === 2 ? '🥉 ' : '';
+      tr.innerHTML = `
+        <td>
+          <div class="item-name">${medal}${this._e(row.itemName)}</div>
+          <span class="item-cat">${this._e(row.category)}</span>
+        </td>
+        <td style="color:var(--text2);font-size:13px">${this._e(row.storeName)}</td>
+        <td class="price-cell"><span style="text-decoration:line-through;color:var(--text3);font-size:13px">¥${row.originalPrice.toLocaleString()}</span></td>
+        <td class="price-cell"><span class="price-tag sale">¥${row.price.toLocaleString()}</span></td>
+        <td class="price-cell"><span class="discount-saving">－¥${row.saving.toLocaleString()}</span></td>
+        <td class="price-cell"><span class="discount-pct">${row.savingPct}% OFF</span></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  },
+
+  // ══════════════════════════════════════
+  // モード3: スーパー別最安値
+  // 選択した店舗の商品を安い順に表示
+  // ══════════════════════════════════════
+  _renderByStoreTable(allItems, stores) {
+    const storeId = this.currentStoreFilter;
+    const store   = stores.find(s => s.id === storeId);
+    if (!store) return;
+
+    // 選択店舗の商品をすべて取得して安い順にソート
+    const storeItems = [];
+    allItems.forEach(item => {
+      const d = item.stores[storeId];
+      if (d) {
+        const isMinOverall = item.minStoreId === storeId;
+        storeItems.push({ ...item, storeData: d, isMinOverall });
       }
-      if (av < bv) return this.sortAsc ? -1 : 1;
-      if (av > bv) return this.sortAsc ?  1 : -1;
-      return 0;
+    });
+    storeItems.sort((a, b) => a.storeData.price - b.storeData.price);
+
+    const thead = document.getElementById('priceTableHead');
+    const tbody = document.getElementById('priceTableBody');
+
+    thead.innerHTML = `<tr>
+      <th>商品名</th>
+      <th style="text-align:right">${this._e(store.name)} の価格</th>
+      <th style="text-align:right">他店最安値</th>
+      <th style="text-align:right">比較</th>
+    </tr>`;
+
+    tbody.innerHTML = '';
+
+    if (storeItems.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--text3)">この店舗のデータがありません</td></tr>`;
+      return;
+    }
+
+    storeItems.forEach(item => {
+      const d = item.storeData;
+      const orig = d.originalPrice
+        ? `<span style="text-decoration:line-through;font-size:11px;color:var(--text3)">¥${d.originalPrice.toLocaleString()}</span> ` : '';
+      const sale = d.isSale ? '<span class="sale-badge">SALE</span>' : '';
+
+      // 他店の最安値
+      const otherPrices = Object.entries(item.stores)
+        .filter(([sid]) => sid !== storeId)
+        .map(([, data]) => data.price);
+      const otherMin = otherPrices.length ? Math.min(...otherPrices) : null;
+
+      let compareCell = '<span class="price-none">—</span>';
+      if (otherMin !== null) {
+        const diff = d.price - otherMin;
+        if (diff > 0) {
+          compareCell = `<span class="compare-worse">＋¥${diff.toLocaleString()} 高い</span>`;
+        } else if (diff < 0) {
+          compareCell = `<span class="compare-best">－¥${Math.abs(diff).toLocaleString()} 安い ✓</span>`;
+        } else {
+          compareCell = `<span style="color:var(--text2)">同額</span>`;
+        }
+      }
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>
+          <div class="item-name">${this._e(item.name)}</div>
+          <span class="item-cat">${this._e(item.category)}</span>
+        </td>
+        <td class="price-cell">
+          ${orig}<span class="price-tag ${item.isMinOverall ? 'best' : d.isSale ? 'sale' : 'normal'}">¥${d.price.toLocaleString()}</span>${sale}
+        </td>
+        <td class="price-cell">
+          ${otherMin !== null ? `<span class="price-tag normal">¥${otherMin.toLocaleString()}</span>` : '<span class="price-none">—</span>'}
+        </td>
+        <td class="price-cell">${compareCell}</td>
+      `;
+      tbody.appendChild(tr);
     });
   },
 
