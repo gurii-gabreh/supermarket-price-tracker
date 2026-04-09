@@ -10,34 +10,38 @@ const App = {
   init() {
     UI.initSetupPanel();
     this._bindEvents();
-
-    // 価格履歴ボタン初期表示
     const sheetUrl = Config.get('sheetUrl');
     document.getElementById('btnOpenSheet').style.display = sheetUrl ? 'flex' : 'none';
+    this._autoFillLocation();
+  },
+
+  // ── IPから現在地を自動入力 ──
+  async _autoFillLocation() {
+    const input = document.getElementById('addressInput');
+    if (input.value.trim()) return;
+    try {
+      const res  = await fetch('https://ip-api.com/json/?lang=ja&fields=status,city,regionName');
+      const data = await res.json();
+      if (data.status === 'success') {
+        input.value = [data.regionName, data.city].filter(Boolean).join(' ');
+      }
+    } catch (e) { /* 無視 */ }
   },
 
   _bindEvents() {
-    // 検索
     document.getElementById('btnSearchStores').addEventListener('click', () => this.searchStores());
     document.getElementById('addressInput').addEventListener('keydown', e => {
       if (e.key === 'Enter') this.searchStores();
     });
-    // 検索ボックスのフォーカスアニメ
     document.getElementById('addressInput').addEventListener('focus', () => {
       document.getElementById('searchField').style.borderColor = 'var(--lime)';
     });
     document.getElementById('addressInput').addEventListener('blur', () => {
       document.getElementById('searchField').style.borderColor = '';
     });
-
-    // 全選択
     document.getElementById('btnSelectAll').addEventListener('click', () => UI.selectAllStores());
-
-    // 収集
     document.getElementById('btnCollectPrices').addEventListener('click', () => this.collectPrices());
     document.getElementById('btnReCollect').addEventListener('click', () => this.collectPrices());
-
-    // シート保存・表示
     document.getElementById('btnExportSheet').addEventListener('click', () => this.exportToSheet());
     document.getElementById('btnOpenSheet').addEventListener('click', () => {
       const url = Config.get('sheetUrl');
@@ -46,15 +50,15 @@ const App = {
     });
   },
 
-  // ── スーパー検索（住所テキストから） ──
+  // ══════════════════════════════════════════
+  // スーパー検索（OpenStreetMap 完全無料）
+  // ══════════════════════════════════════════
   async searchStores() {
     const address = document.getElementById('addressInput').value.trim();
     if (!address) {
       UI.toast('住所を入力してください', 'error');
-      // 入力欄を揺らすアニメ
       const field = document.getElementById('searchField');
-      field.style.animation = 'none';
-      field.offsetHeight;
+      field.style.animation = 'none'; field.offsetHeight;
       field.style.animation = 'shake 0.4s ease';
       return;
     }
@@ -64,43 +68,97 @@ const App = {
     btn.innerHTML = '<span style="opacity:.6">検索中...</span>';
 
     try {
-      const gasUrl = Config.get('gasUrl');
-      let stores;
+      // STEP1: Nominatim で住所→座標変換（無料）
+      const geoRes = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&accept-language=ja`,
+        { headers: { 'Accept-Language': 'ja' } }
+      );
+      const geoData = await geoRes.json();
 
-      if (gasUrl) {
-        // 本番: GASでスーパー検索
-        const params = new URLSearchParams({ action: 'findStores', address });
-        const res = await fetch(`${gasUrl}?${params}`);
-        if (!res.ok) throw new Error(`通信エラー: ${res.status}`);
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-        stores = data.stores || [];
-        UI.renderStores(stores, false);
-      } else {
-        // デモモード
-        await new Promise(r => setTimeout(r, 600));
-        stores = this._demoStores(address);
-        UI.renderStores(stores, true);
+      if (!geoData || geoData.length === 0) {
+        UI.toast('住所が見つかりませんでした。別の住所を試してください。', 'error');
+        return;
       }
+
+      const lat = parseFloat(geoData[0].lat);
+      const lon = parseFloat(geoData[0].lon);
+
+      // STEP2: Overpass API でスーパーを検索（無料・半径2km）
+      const radius = 2000; // メートル
+      const query = `
+        [out:json][timeout:20];
+        (
+          node["shop"="supermarket"](around:${radius},${lat},${lon});
+          node["shop"="grocery"](around:${radius},${lat},${lon});
+          node["shop"="convenience"](around:${radius},${lat},${lon});
+          way["shop"="supermarket"](around:${radius},${lat},${lon});
+          way["shop"="grocery"](around:${radius},${lat},${lon});
+        );
+        out center;
+      `;
+
+      const overpassRes = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        body: query,
+      });
+      const overpassData = await overpassRes.json();
+
+      // STEP3: 結果をアプリ形式に変換
+      const stores = (overpassData.elements || [])
+        .filter(el => el.tags && el.tags.name)
+        .map(el => {
+          const elLat = el.lat ?? el.center?.lat ?? lat;
+          const elLon = el.lon ?? el.center?.lon ?? lon;
+          const dist  = this._calcDistance(lat, lon, elLat, elLon);
+          return {
+            id:       `osm_${el.id}`,
+            name:     el.tags.name,
+            address:  el.tags['addr:full'] || el.tags['addr:city'] || address,
+            distance: Math.round(dist * 10) / 10,
+            rating:   null,
+            openNow:  null,
+            website:  el.tags.website || null,
+            lat: elLat,
+            lon: elLon,
+          };
+        })
+        .sort((a, b) => a.distance - b.distance);
 
       this.currentStores = stores;
 
       if (stores.length > 0) {
+        UI.renderStores(stores, false);
         UI.toast(`${stores.length}件のスーパーが見つかりました`, 'success');
         setTimeout(() => {
           document.getElementById('storesSection')
             .scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 100);
       } else {
-        UI.toast('この住所付近にスーパーが見つかりませんでした', 'info');
+        // OpenStreetMapに登録がない場合はデモにフォールバック
+        const demoStores = this._demoStores(address);
+        this.currentStores = demoStores;
+        UI.renderStores(demoStores, true);
+        UI.toast('付近のスーパー情報が見つからないためサンプルを表示します', 'info', 6000);
       }
+
     } catch (e) {
-      UI.toast(`エラー: ${e.message}`, 'error');
+      UI.toast(`検索エラー: ${e.message}`, 'error');
       console.error(e);
     } finally {
       btn.disabled = false;
       btn.innerHTML = 'スーパーを探す <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
     }
+  },
+
+  // 2点間距離計算（km）
+  _calcDistance(lat1, lon1, lat2, lon2) {
+    const R    = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a    = Math.sin(dLat/2)**2 +
+                 Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) *
+                 Math.sin(dLon/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   },
 
   // ── チラシ収集 ──
@@ -167,11 +225,9 @@ const App = {
       UI.toast('先にチラシ収集を実行してください', 'error');
       return;
     }
-
     const btn = document.getElementById('btnExportSheet');
     btn.disabled = true;
     btn.textContent = '保存中...';
-
     try {
       await Scraper.saveToSheet(this.collectedData, this.collectedStores, this.collectedAt);
       UI.showSaveStatus(true, '✓ Googleスプレッドシートに保存しました');
@@ -187,30 +243,26 @@ const App = {
 
   // ── デモ用スーパー生成 ──
   _demoStores(address) {
-    const list = [
-      'ベルク','カスミ','マルエツ','ヤオコー','コープみらい',
-      'イオン','ライフ','オーケー','ロピア','サミット'
-    ];
+    const list = ['ベルク','カスミ','マルエツ','ヤオコー','コープみらい','イオン','ライフ','オーケー','ロピア','サミット'];
     const count = 5 + Math.floor(Math.random() * 4);
     return Array.from({ length: count }, (_, i) => ({
-      id: `demo_${i}`,
-      name: list[i % list.length] + ['店','フードセンター','マーケット'][i % 3],
-      address: `${address} ${i + 1}丁目付近`,
-      distance: parseFloat((0.2 + Math.random() * 2.8).toFixed(1)),
+      id:       `demo_${i}`,
+      name:     list[i % list.length] + ['店','フードセンター','マーケット'][i % 3],
+      address:  `${address} ${i+1}丁目付近`,
+      distance: parseFloat((0.2 + i * 0.45).toFixed(1)),
       rating:   parseFloat((3.0 + Math.random() * 1.8).toFixed(1)),
-      openNow:  Math.random() > 0.2,
+      openNow:  i % 4 !== 3,
       website:  null,
-    })).sort((a, b) => a.distance - b.distance);
+    }));
   },
 };
 
-// shakeアニメ定義
-const style = document.createElement('style');
-style.textContent = `@keyframes shake {
+const _shakeStyle = document.createElement('style');
+_shakeStyle.textContent = `@keyframes shake {
   0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)}
   40%{transform:translateX(6px)} 60%{transform:translateX(-4px)}
   80%{transform:translateX(4px)}
 }`;
-document.head.appendChild(style);
+document.head.appendChild(_shakeStyle);
 
 document.addEventListener('DOMContentLoaded', () => App.init());
