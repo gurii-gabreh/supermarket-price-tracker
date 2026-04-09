@@ -15,17 +15,20 @@ const App = {
     this._autoFillLocation();
   },
 
-  // ── IPから現在地を自動入力 ──
+  // ── IPから現在地を自動入力（ipwho.is 無料） ──
   async _autoFillLocation() {
     const input = document.getElementById('addressInput');
     if (input.value.trim()) return;
     try {
-      const res  = await fetch('https://ip-api.com/json/?lang=ja&fields=status,city,regionName');
+      const res  = await fetch('https://ipwho.is/');
       const data = await res.json();
-      if (data.status === 'success') {
-        input.value = [data.regionName, data.city].filter(Boolean).join(' ');
+      if (data.success) {
+        const location = [data.region, data.city].filter(Boolean).join(' ');
+        input.value = location;
       }
-    } catch (e) { /* 無視 */ }
+    } catch (e) {
+      console.log('IP位置情報取得失敗:', e.message);
+    }
   },
 
   _bindEvents() {
@@ -68,61 +71,23 @@ const App = {
     btn.innerHTML = '<span style="opacity:.6">検索中...</span>';
 
     try {
-      // STEP1: Nominatim で住所→座標変換（無料）
+      // STEP1: Nominatim で住所→座標変換
       const geoRes = await fetch(
         `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&accept-language=ja`,
-        { headers: { 'Accept-Language': 'ja' } }
+        { headers: { 'User-Agent': 'KakakuTracker/1.0' } }
       );
       const geoData = await geoRes.json();
 
       if (!geoData || geoData.length === 0) {
-        UI.toast('住所が見つかりませんでした。別の住所を試してください。', 'error');
+        UI.toast('住所が見つかりませんでした', 'error');
         return;
       }
 
       const lat = parseFloat(geoData[0].lat);
       const lon = parseFloat(geoData[0].lon);
 
-      // STEP2: Overpass API でスーパーを検索（無料・半径2km）
-      const radius = 2000; // メートル
-      const query = `
-        [out:json][timeout:20];
-        (
-          node["shop"="supermarket"](around:${radius},${lat},${lon});
-          node["shop"="grocery"](around:${radius},${lat},${lon});
-          node["shop"="convenience"](around:${radius},${lat},${lon});
-          way["shop"="supermarket"](around:${radius},${lat},${lon});
-          way["shop"="grocery"](around:${radius},${lat},${lon});
-        );
-        out center;
-      `;
-
-      const overpassRes = await fetch('https://overpass-api.de/api/interpreter', {
-        method: 'POST',
-        body: query,
-      });
-      const overpassData = await overpassRes.json();
-
-      // STEP3: 結果をアプリ形式に変換
-      const stores = (overpassData.elements || [])
-        .filter(el => el.tags && el.tags.name)
-        .map(el => {
-          const elLat = el.lat ?? el.center?.lat ?? lat;
-          const elLon = el.lon ?? el.center?.lon ?? lon;
-          const dist  = this._calcDistance(lat, lon, elLat, elLon);
-          return {
-            id:       `osm_${el.id}`,
-            name:     el.tags.name,
-            address:  el.tags['addr:full'] || el.tags['addr:city'] || address,
-            distance: Math.round(dist * 10) / 10,
-            rating:   null,
-            openNow:  null,
-            website:  el.tags.website || null,
-            lat: elLat,
-            lon: elLon,
-          };
-        })
-        .sort((a, b) => a.distance - b.distance);
+      // STEP2: Overpass APIミラーでスーパーを検索（複数ミラーを順番に試す）
+      const stores = await this._searchStoresWithFallback(lat, lon);
 
       this.currentStores = stores;
 
@@ -134,7 +99,7 @@ const App = {
             .scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 100);
       } else {
-        // OpenStreetMapに登録がない場合はデモにフォールバック
+        // 見つからない場合はデモにフォールバック
         const demoStores = this._demoStores(address);
         this.currentStores = demoStores;
         UI.renderStores(demoStores, true);
@@ -148,6 +113,58 @@ const App = {
       btn.disabled = false;
       btn.innerHTML = 'スーパーを探す <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
     }
+  },
+
+  // 複数のOverpassミラーを順番に試す
+  async _searchStoresWithFallback(lat, lon) {
+    const radius = 2000;
+    const query = `[out:json][timeout:25];(node["shop"="supermarket"](around:${radius},${lat},${lon});node["shop"="grocery"](around:${radius},${lat},${lon});way["shop"="supermarket"](around:${radius},${lat},${lon}););out center;`;
+
+    const mirrors = [
+      'https://overpass.kumi.systems/api/interpreter',
+      'https://overpass.openstreetmap.ru/api/interpreter',
+      'https://overpass-api.de/api/interpreter',
+    ];
+
+    for (const mirror of mirrors) {
+      try {
+        const res  = await fetch(mirror, {
+          method: 'POST',
+          body: query,
+          signal: AbortSignal.timeout(10000), // 10秒タイムアウト
+        });
+        if (!res.ok) continue;
+        const data = await res.json();
+        const stores = this._parseOverpassResult(data, lat, lon);
+        if (stores !== null) return stores; // 成功
+      } catch (e) {
+        console.log(`ミラー失敗 (${mirror}):`, e.message);
+        continue; // 次のミラーを試す
+      }
+    }
+
+    return []; // 全ミラー失敗 → 空配列（デモにフォールバック）
+  },
+
+  // Overpass結果をアプリ形式に変換
+  _parseOverpassResult(data, lat, lon) {
+    if (!data || !data.elements) return null;
+    return data.elements
+      .filter(el => el.tags && el.tags.name)
+      .map(el => {
+        const elLat = el.lat ?? el.center?.lat ?? lat;
+        const elLon = el.lon ?? el.center?.lon ?? lon;
+        return {
+          id:       `osm_${el.id}`,
+          name:     el.tags.name,
+          address:  el.tags['addr:full'] || el.tags['addr:city'] || el.tags['addr:street'] || '',
+          distance: Math.round(this._calcDistance(lat, lon, elLat, elLon) * 10) / 10,
+          rating:   null,
+          openNow:  null,
+          website:  el.tags.website || null,
+        };
+      })
+      .sort((a, b) => a.distance - b.distance);
   },
 
   // 2点間距離計算（km）
@@ -168,11 +185,9 @@ const App = {
       UI.toast('収集するスーパーを選択してください', 'error');
       return;
     }
-
     const selected = this.currentStores.filter(s => selectedIds.includes(s.id));
     const btn = document.getElementById('btnCollectPrices');
     btn.disabled = true;
-
     UI.showCollecting(selected.length);
     this.collectedAt = new Date().toISOString();
     const results = [];
@@ -200,7 +215,6 @@ const App = {
     const merged = Scraper.mergeAllPrices(results);
     this.collectedData   = merged;
     this.collectedStores = selected;
-
     UI.renderResults(merged, selected, this.collectedAt);
     btn.disabled = false;
 
