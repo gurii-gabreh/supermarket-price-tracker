@@ -12,23 +12,6 @@ const App = {
     this._bindEvents();
     const sheetUrl = Config.get('sheetUrl');
     document.getElementById('btnOpenSheet').style.display = sheetUrl ? 'flex' : 'none';
-    this._autoFillLocation();
-  },
-
-  // ── IPから現在地を自動入力（ipwho.is 無料） ──
-  async _autoFillLocation() {
-    const input = document.getElementById('addressInput');
-    if (input.value.trim()) return;
-    try {
-      const res  = await fetch('https://ipwho.is/');
-      const data = await res.json();
-      if (data.success) {
-        const location = [data.region, data.city].filter(Boolean).join(' ');
-        input.value = location;
-      }
-    } catch (e) {
-      console.log('IP位置情報取得失敗:', e.message);
-    }
   },
 
   _bindEvents() {
@@ -54,7 +37,9 @@ const App = {
   },
 
   // ══════════════════════════════════════════
-  // スーパー検索（OpenStreetMap 完全無料）
+  // スーパー検索
+  // GAS設定済み → GAS経由でOverpass検索（確実）
+  // GAS未設定   → デモデータ
   // ══════════════════════════════════════════
   async searchStores() {
     const address = document.getElementById('addressInput').value.trim();
@@ -71,39 +56,34 @@ const App = {
     btn.innerHTML = '<span style="opacity:.6">検索中...</span>';
 
     try {
-      // STEP1: Nominatim で住所→座標変換
-      const geoRes = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&accept-language=ja`,
-        { headers: { 'User-Agent': 'KakakuTracker/1.0' } }
-      );
-      const geoData = await geoRes.json();
+      const gasUrl = Config.get('gasUrl');
+      let stores;
 
-      if (!geoData || geoData.length === 0) {
-        UI.toast('住所が見つかりませんでした', 'error');
-        return;
+      if (gasUrl) {
+        // GAS経由でスーパー検索（Googleサーバーから実行→タイムアウトしない）
+        const params = new URLSearchParams({ action: 'findStores', address });
+        const res    = await fetch(`${gasUrl}?${params}`);
+        if (!res.ok) throw new Error(`通信エラー: ${res.status}`);
+        const data   = await res.json();
+        if (data.error) throw new Error(data.error);
+        stores = data.stores || [];
+        UI.renderStores(stores, false);
+        UI.toast(`${stores.length}件のスーパーが見つかりました`, 'success');
+      } else {
+        // GAS未設定 → デモ
+        await new Promise(r => setTimeout(r, 600));
+        stores = this._demoStores(address);
+        UI.renderStores(stores, true);
+        UI.toast('GAS URLを設定すると実際のお店が検索できます', 'info', 6000);
       }
-
-      const lat = parseFloat(geoData[0].lat);
-      const lon = parseFloat(geoData[0].lon);
-
-      // STEP2: Overpass APIミラーでスーパーを検索（複数ミラーを順番に試す）
-      const stores = await this._searchStoresWithFallback(lat, lon);
 
       this.currentStores = stores;
 
       if (stores.length > 0) {
-        UI.renderStores(stores, false);
-        UI.toast(`${stores.length}件のスーパーが見つかりました`, 'success');
         setTimeout(() => {
           document.getElementById('storesSection')
             .scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 100);
-      } else {
-        // 見つからない場合はデモにフォールバック
-        const demoStores = this._demoStores(address);
-        this.currentStores = demoStores;
-        UI.renderStores(demoStores, true);
-        UI.toast('付近のスーパー情報が見つからないためサンプルを表示します', 'info', 6000);
       }
 
     } catch (e) {
@@ -113,69 +93,6 @@ const App = {
       btn.disabled = false;
       btn.innerHTML = 'スーパーを探す <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
     }
-  },
-
-  // 複数のOverpassミラーを順番に試す
-  async _searchStoresWithFallback(lat, lon) {
-    const radius = 2000;
-    const query = `[out:json][timeout:25];(node["shop"="supermarket"](around:${radius},${lat},${lon});node["shop"="grocery"](around:${radius},${lat},${lon});way["shop"="supermarket"](around:${radius},${lat},${lon}););out center;`;
-
-    const mirrors = [
-      'https://overpass.kumi.systems/api/interpreter',
-      'https://overpass.openstreetmap.ru/api/interpreter',
-      'https://overpass-api.de/api/interpreter',
-    ];
-
-    for (const mirror of mirrors) {
-      try {
-        const res  = await fetch(mirror, {
-          method: 'POST',
-          body: query,
-          signal: AbortSignal.timeout(10000), // 10秒タイムアウト
-        });
-        if (!res.ok) continue;
-        const data = await res.json();
-        const stores = this._parseOverpassResult(data, lat, lon);
-        if (stores !== null) return stores; // 成功
-      } catch (e) {
-        console.log(`ミラー失敗 (${mirror}):`, e.message);
-        continue; // 次のミラーを試す
-      }
-    }
-
-    return []; // 全ミラー失敗 → 空配列（デモにフォールバック）
-  },
-
-  // Overpass結果をアプリ形式に変換
-  _parseOverpassResult(data, lat, lon) {
-    if (!data || !data.elements) return null;
-    return data.elements
-      .filter(el => el.tags && el.tags.name)
-      .map(el => {
-        const elLat = el.lat ?? el.center?.lat ?? lat;
-        const elLon = el.lon ?? el.center?.lon ?? lon;
-        return {
-          id:       `osm_${el.id}`,
-          name:     el.tags.name,
-          address:  el.tags['addr:full'] || el.tags['addr:city'] || el.tags['addr:street'] || '',
-          distance: Math.round(this._calcDistance(lat, lon, elLat, elLon) * 10) / 10,
-          rating:   null,
-          openNow:  null,
-          website:  el.tags.website || null,
-        };
-      })
-      .sort((a, b) => a.distance - b.distance);
-  },
-
-  // 2点間距離計算（km）
-  _calcDistance(lat1, lon1, lat2, lon2) {
-    const R    = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a    = Math.sin(dLat/2)**2 +
-                 Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) *
-                 Math.sin(dLon/2)**2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   },
 
   // ── チラシ収集 ──
