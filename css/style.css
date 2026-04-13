@@ -507,3 +507,13 @@ body {
 .compare-worse {
   color: var(--red); font-family: var(--font-mono); font-size: 13px;
 }
+
+/* ── 有効期限バッジ ── */
+.valid-date-badge {
+  display: inline-block; margin-top: 3px;
+  font-size: 10px; font-weight: 700;
+  background: rgba(255,107,107,0.15);
+  color: var(--red); border: 1px solid rgba(255,107,107,0.3);
+  padding: 1px 7px; border-radius: 4px;
+  font-family: var(--font-mono);
+}
