@@ -320,6 +320,7 @@ const UI = {
         <td>
           <div class="item-name">${this._e(item.name)}</div>
           <span class="item-cat">${this._e(item.category)}</span>
+          ${item.validDate && item.validDate !== '期間中' ? `<span class="valid-date-badge">${this._e(item.validDate)}</span>` : ''}
         </td>
         ${rankCells}
       `;
