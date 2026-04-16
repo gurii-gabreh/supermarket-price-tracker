@@ -119,12 +119,12 @@ const App = {
           ? await Scraper.fetchStorePrices(store)
           : await this._demoFetch(store);
 
-        // GASから空配列が返った＝チラシなし
-        if (gasUrl && (!items || items.length === 0)) {
+        // nullまたは空配列 = チラシなし
+        if (gasUrl && (items === null || !items || items.length === 0)) {
           noChirashi.push(store);
           results.push({ store, items: [], noChirashi: true });
         } else {
-          results.push({ store, items });
+          results.push({ store, items: items || [] });
         }
       } catch (e) {
         console.error(store.name, e);

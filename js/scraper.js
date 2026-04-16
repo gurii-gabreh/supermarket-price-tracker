@@ -4,28 +4,29 @@
 
 const Scraper = {
 
-  // GASにスクレイピングを依頼
+  // GASにチラシ価格取得を依頼
   async fetchStorePrices(store) {
     const gasUrl = Config.get('gasUrl');
     if (!gasUrl) throw new Error('Google Apps Script URLが設定されていません');
 
     const params = new URLSearchParams({
-      action: 'scrape',
-      storeName: store.name,
-      storeAddress: store.address,
-      website: store.website || '',
-      placeId: store.id,
+      action:       'scrape',
+      storeName:    store.name,
+      storeAddress: store.address || '',
     });
 
     const response = await fetch(`${gasUrl}?${params.toString()}`, {
       method: 'GET',
-      mode: 'cors',
+      mode:   'cors',
     });
 
     if (!response.ok) throw new Error(`GASリクエスト失敗: ${response.status}`);
     const data = await response.json();
     if (data.error) throw new Error(data.error);
-    return data.items || [];
+
+    // GASが空配列を返した場合はnullを返してチラシなし判定させる
+    if (!data.items || data.items.length === 0) return null;
+    return data.items;
   },
 
   // スプレッドシートに保存
