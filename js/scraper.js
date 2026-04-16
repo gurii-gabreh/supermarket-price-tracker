@@ -13,6 +13,7 @@ const Scraper = {
       action:       'scrape',
       storeName:    store.name,
       storeAddress: store.address || '',
+      tokubaiUrl:   store.tokubaiUrl || '',
     });
 
     const response = await fetch(`${gasUrl}?${params.toString()}`, {
@@ -24,7 +25,7 @@ const Scraper = {
     const data = await response.json();
     if (data.error) throw new Error(data.error);
 
-    // GASが空配列を返した場合はnullを返してチラシなし判定させる
+    // 空配列はチラシなしとしてnullを返す
     if (!data.items || data.items.length === 0) return null;
     return data.items;
   },
