@@ -107,8 +107,9 @@ const App = {
     btn.disabled = true;
     UI.showCollecting(selected.length);
     this.collectedAt = new Date().toISOString();
-    const results = [];
-    const gasUrl  = Config.get('gasUrl');
+    const results      = [];
+    const noChirashi   = []; // チラシなし店舗
+    const gasUrl       = Config.get('gasUrl');
 
     for (let i = 0; i < selected.length; i++) {
       const store = selected[i];
@@ -117,11 +118,19 @@ const App = {
         const items = gasUrl
           ? await Scraper.fetchStorePrices(store)
           : await this._demoFetch(store);
-        results.push({ store, items });
+
+        // GASから空配列が返った＝チラシなし
+        if (gasUrl && (!items || items.length === 0)) {
+          noChirashi.push(store);
+          results.push({ store, items: [], noChirashi: true });
+        } else {
+          results.push({ store, items });
+        }
       } catch (e) {
         console.error(store.name, e);
         UI.toast(`${store.name}: 収集失敗`, 'error');
-        results.push({ store, items: [] });
+        noChirashi.push(store);
+        results.push({ store, items: [], noChirashi: true });
       }
     }
 
@@ -129,13 +138,19 @@ const App = {
     await new Promise(r => setTimeout(r, 400));
     UI.hideCollecting();
 
-    const merged = Scraper.mergeAllPrices(results);
-    this.collectedData   = merged;
-    this.collectedStores = selected;
-    UI.renderResults(merged, selected, this.collectedAt);
+    const merged = Scraper.mergeAllPrices(results.filter(r => !r.noChirashi));
+    this.collectedData    = merged;
+    this.collectedStores  = selected;
+    this.noChirashiStores = noChirashi;
+
+    UI.renderResults(merged, selected, this.collectedAt, noChirashi);
     btn.disabled = false;
 
-    UI.toast(`${merged.length}品目の価格を収集しました${gasUrl ? '' : '（デモ）'}`, 'success', 5000);
+    const withChirashi = selected.length - noChirashi.length;
+    UI.toast(
+      `${withChirashi}店のチラシから${merged.length}品目を収集${noChirashi.length > 0 ? `（${noChirashi.length}店はチラシなし）` : ''}`,
+      'success', 6000
+    );
     setTimeout(() => {
       document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 200);
