@@ -45,18 +45,79 @@
         </button>
       </div>
       <p class="settings-desc">設定はブラウザに保存されます。GAS URLなしでもデモモードで試せます。</p>
+
       <div class="settings-fields">
+        <!-- GAS URL -->
         <div class="field-group">
           <label class="field-label">Google Apps Script URL</label>
           <input type="text" id="gasUrl" placeholder="https://script.google.com/macros/s/..." class="field-input">
           <span class="field-hint">チラシ収集とスプレッドシート保存に使用します</span>
         </div>
+        <!-- スプレッドシートURL -->
         <div class="field-group">
           <label class="field-label">スプレッドシート URL <em>（任意）</em></label>
           <input type="text" id="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/..." class="field-input">
           <span class="field-hint">「価格履歴」ボタンのリンク先になります</span>
         </div>
+
+        <!-- 区切り線 -->
+        <div class="settings-divider"></div>
+
+        <!-- 登録スーパー -->
+        <div class="field-group">
+          <label class="field-label">登録スーパー</label>
+          <span class="field-hint" style="margin-bottom:12px;display:block">住所を入力してスーパーを検索・登録してください</span>
+
+          <!-- スーパー検索欄（最初は1欄） -->
+          <div id="storeSearchRows">
+            <div class="store-search-row" data-row="0">
+              <div class="store-search-input-wrap">
+                <input type="text" class="field-input store-address-input" placeholder="例: 栃木県足利市小俣町">
+                <button class="ghost-btn store-search-btn">検索</button>
+              </div>
+              <!-- 候補リスト -->
+              <div class="store-candidates" style="display:none"></div>
+            </div>
+          </div>
+          <button class="add-row-btn" id="btnAddStoreRow">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            検索欄を追加
+          </button>
+        </div>
+
+        <!-- 登録済みスーパー一覧 -->
+        <div class="field-group" id="registeredStoresSection" style="display:none">
+          <label class="field-label">登録済みスーパー</label>
+          <div id="registeredStoresList"></div>
+        </div>
+
+        <!-- 区切り線 -->
+        <div class="settings-divider"></div>
+
+        <!-- 自動収集設定 -->
+        <div class="field-group">
+          <label class="field-label">自動チラシ収集</label>
+          <div class="auto-collect-row">
+            <div class="auto-collect-info">
+              <span class="auto-collect-label">毎朝10時に自動収集</span>
+              <span class="auto-collect-sub" id="lastCollectedAt">最終収集: 未収集</span>
+            </div>
+            <button class="toggle-btn" id="btnAutoCollect" data-on="false">
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+          <span class="field-hint">GASのトリガーで毎朝10時に自動収集します</span>
+        </div>
+
+        <!-- 今すぐ収集 -->
+        <div class="field-group">
+          <button class="primary-btn" id="btnCollectNow" style="width:100%">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            今すぐ収集
+          </button>
+        </div>
       </div>
+
       <button class="save-btn" id="btnSaveConfig">保存する</button>
     </div>
   </div>
