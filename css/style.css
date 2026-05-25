@@ -553,3 +553,93 @@ body {
   padding: 1px 7px; border-radius: 4px;
   font-family: var(--font-mono);
 }
+
+/* ── 設定画面追加スタイル ── */
+.settings-divider {
+  border: none; border-top: 1px solid var(--border);
+  margin: 20px 0;
+}
+
+/* 自動収集行 */
+.auto-collect-row {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px 16px; margin-bottom: 8px;
+}
+.auto-collect-info { display: flex; flex-direction: column; gap: 3px; }
+.auto-collect-label { font-size: 14px; font-weight: 600; color: var(--text); }
+.auto-collect-sub   { font-size: 11px; color: var(--text3); font-family: var(--font-mono); }
+
+/* トグルボタン */
+.toggle-btn {
+  width: 48px; height: 26px; border-radius: 99px;
+  background: var(--border2); border: none; cursor: pointer;
+  position: relative; transition: background 0.25s; flex-shrink: 0;
+}
+.toggle-btn[data-on="true"]  { background: var(--lime); }
+.toggle-knob {
+  position: absolute; top: 3px; left: 3px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; transition: transform 0.25s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+.toggle-btn[data-on="true"] .toggle-knob { transform: translateX(22px); }
+
+/* スーパー検索行 */
+.store-search-row {
+  margin-bottom: 12px;
+  border: 1px solid var(--border); border-radius: 12px;
+  padding: 12px; background: var(--bg3);
+}
+.store-search-input-wrap {
+  display: flex; gap: 8px; align-items: center;
+}
+.store-search-input-wrap .field-input { flex: 1; margin: 0; }
+.store-search-btn { white-space: nowrap; flex-shrink: 0; }
+
+/* 候補リスト */
+.store-candidates {
+  margin-top: 10px; display: flex; flex-direction: column; gap: 6px;
+}
+.store-candidate-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px; border-radius: 8px;
+  background: var(--bg2); border: 1px solid var(--border);
+  cursor: pointer; transition: all 0.15s;
+}
+.store-candidate-item:hover { border-color: var(--lime); }
+.store-candidate-name  { font-size: 13px; font-weight: 600; color: var(--text); }
+.store-candidate-addr  { font-size: 11px; color: var(--text3); margin-top: 2px; }
+.store-candidate-add   {
+  font-size: 11px; font-weight: 700; color: var(--lime);
+  background: rgba(184,255,87,0.1); border: 1px solid rgba(184,255,87,0.3);
+  padding: 3px 10px; border-radius: 99px; white-space: nowrap;
+}
+
+/* 検索欄追加ボタン */
+.add-row-btn {
+  display: flex; align-items: center; gap: 6px;
+  background: none; border: 1px dashed var(--border2);
+  color: var(--text2); border-radius: 8px;
+  padding: 8px 14px; font-size: 12px; cursor: pointer;
+  width: 100%; justify-content: center;
+  transition: all 0.15s; margin-top: 4px;
+}
+.add-row-btn:hover { border-color: var(--lime); color: var(--lime); }
+
+/* 登録済みスーパー */
+.registered-store-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px; border-radius: 10px;
+  background: var(--bg3); border: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.registered-store-info { display: flex; flex-direction: column; gap: 2px; }
+.registered-store-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.registered-store-addr { font-size: 11px; color: var(--text3); }
+.registered-store-del  {
+  background: none; border: none; cursor: pointer;
+  color: var(--text3); padding: 4px; border-radius: 4px;
+  transition: color 0.15s;
+}
+.registered-store-del:hover { color: var(--red); }
