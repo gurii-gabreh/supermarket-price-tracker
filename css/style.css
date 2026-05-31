@@ -643,3 +643,69 @@ body {
   transition: color 0.15s;
 }
 .registered-store-del:hover { color: var(--red); }
+
+/* ── デモモードボタン ── */
+.demo-btn {
+  background: rgba(255,200,0,0.1);
+  border: 1px solid rgba(255,200,0,0.3);
+  color: #ffc800;
+}
+.demo-btn.active {
+  background: #ffc800;
+  color: #080c10;
+  border-color: #ffc800;
+}
+
+/* ── デモバナー ── */
+.demo-banner {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: linear-gradient(90deg, rgba(255,200,0,0.15), rgba(255,200,0,0.08));
+  border-bottom: 1px solid rgba(255,200,0,0.3);
+  padding: 10px 20px; font-size: 13px;
+  position: sticky; top: 64px; z-index: 90;
+}
+.demo-banner-icon { font-size: 16px; }
+.demo-banner-text { color: #ffc800; font-weight: 600; }
+.demo-banner-close {
+  background: rgba(255,200,0,0.2); border: 1px solid rgba(255,200,0,0.4);
+  color: #ffc800; border-radius: 6px; padding: 3px 12px;
+  font-size: 12px; font-weight: 700; cursor: pointer;
+  transition: all 0.15s; margin-left: 8px;
+}
+.demo-banner-close:hover { background: #ffc800; color: #080c10; }
+
+/* デモモード中は画面に枠をつける */
+body.demo-active {
+  outline: 2px solid rgba(255,200,0,0.4);
+}
+
+/* ── スケジュール時間行 ── */
+.schedule-time-row {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
+}
+.schedule-time-row .schedule-label {
+  font-size: 12px; color: var(--text3); min-width: 60px;
+  font-family: var(--font-mono);
+}
+.schedule-time-selects {
+  display: flex; align-items: center; gap: 6px; flex: 1;
+}
+.schedule-select {
+  background: var(--bg2); border: 1px solid var(--border2);
+  color: var(--text); border-radius: 8px; padding: 6px 10px;
+  font-size: 14px; font-family: var(--font-body); cursor: pointer;
+  transition: border-color 0.15s;
+}
+.schedule-select:focus { outline: none; border-color: var(--lime); }
+.schedule-colon {
+  font-size: 16px; font-weight: 700; color: var(--text2);
+  font-family: var(--font-mono);
+}
+.schedule-del-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--text3); padding: 4px; border-radius: 4px;
+  transition: color 0.15s; margin-left: auto;
+}
+.schedule-del-btn:hover { color: var(--red); }
