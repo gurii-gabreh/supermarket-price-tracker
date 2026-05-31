@@ -23,6 +23,10 @@
         </div>
       </div>
       <nav class="header-nav">
+        <button class="nav-btn demo-btn" id="btnDemoMode">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          デモモード
+        </button>
         <button class="nav-btn" id="btnToggleSetup">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
           設定
@@ -94,19 +98,26 @@
         <!-- 区切り線 -->
         <div class="settings-divider"></div>
 
-        <!-- 自動収集設定 -->
+        <!-- スケジュール収集設定 -->
         <div class="field-group">
-          <label class="field-label">自動チラシ収集</label>
-          <div class="auto-collect-row">
+          <label class="field-label">スケジュール収集</label>
+          <div class="auto-collect-row" style="margin-bottom:12px">
             <div class="auto-collect-info">
-              <span class="auto-collect-label">毎朝10時に自動収集</span>
+              <span class="auto-collect-label">スケジュール収集</span>
               <span class="auto-collect-sub" id="lastCollectedAt">最終収集: 未収集</span>
             </div>
             <button class="toggle-btn" id="btnAutoCollect" data-on="false">
               <span class="toggle-knob"></span>
             </button>
           </div>
-          <span class="field-hint">GASのトリガーで毎朝10時に自動収集します</span>
+
+          <!-- スケジュール時間リスト -->
+          <div id="scheduleTimeList"></div>
+          <button class="add-row-btn" id="btnAddSchedule">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            時間を追加（最大5つ）
+          </button>
+          <span class="field-hint" style="margin-top:8px;display:block">GASのトリガーで指定時刻に自動収集します。保存時にトリガーが自動更新されます。</span>
         </div>
 
         <!-- 今すぐ収集 -->
@@ -119,6 +130,15 @@
       </div>
 
       <button class="save-btn" id="btnSaveConfig">保存する</button>
+    </div>
+  </div>
+
+  <!-- デモモードバナー -->
+  <div id="demoBanner" style="display:none">
+    <div class="demo-banner">
+      <span class="demo-banner-icon">🎬</span>
+      <span class="demo-banner-text">デモモード中 — すべてサンプルデータで動作しています</span>
+      <button class="demo-banner-close" id="btnExitDemo">終了</button>
     </div>
   </div>
 
