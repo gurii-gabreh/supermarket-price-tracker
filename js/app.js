@@ -11,10 +11,53 @@ const App = {
   init() {
     UI.initSetupPanel();
     this._bindEvents();
+    this._bindDemoMode();
     const sheetUrl = Config.get('sheetUrl');
     document.getElementById('btnOpenSheet').style.display = sheetUrl ? 'flex' : 'none';
     // 設定画面初期化
     Settings.init();
+  },
+
+  // ── デモモードのボタン制御 ──
+  _bindDemoMode() {
+    const btn     = document.getElementById('btnDemoMode');
+    const exitBtn = document.getElementById('btnExitDemo');
+    if (btn) {
+      btn.addEventListener('click', () => {
+        const isOn = DemoMode.toggle();
+        if (isOn) {
+          UI.toast('🎬 デモモードON — サンプルデータで動作します', 'info', 5000);
+          // デモ用スーパーをすぐ表示
+          this._showDemoStores();
+        } else {
+          UI.toast('デモモードを終了しました', 'info');
+          // 画面リセット
+          document.getElementById('storesSection').style.display  = 'none';
+          document.getElementById('resultsSection').style.display = 'none';
+          document.getElementById('emptyState').style.display     = 'block';
+        }
+      });
+    }
+    if (exitBtn) {
+      exitBtn.addEventListener('click', () => {
+        DemoMode.disable();
+        UI.toast('デモモードを終了しました', 'info');
+        document.getElementById('storesSection').style.display  = 'none';
+        document.getElementById('resultsSection').style.display = 'none';
+        document.getElementById('emptyState').style.display     = 'block';
+      });
+    }
+  },
+
+  // ── デモ用スーパーを画面に表示 ──
+  _showDemoStores() {
+    const stores = this._demoStores('栃木県足利市小俣町');
+    this.currentStores = stores;
+    UI.renderStores(stores, true);
+    setTimeout(() => {
+      document.getElementById('storesSection')
+        .scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   },
 
   _bindEvents() {
@@ -55,27 +98,35 @@ const App = {
     btn.innerHTML = '<span style="opacity:.6">検索中...</span>';
 
     try {
-      const gasUrl = Config.get('gasUrl');
       let stores;
 
-      if (gasUrl) {
-        const params = new URLSearchParams({ action: 'findStores', address });
-        const res    = await fetch(`${gasUrl}?${params}`);
-        if (!res.ok) throw new Error(`通信エラー: ${res.status}`);
-        const data   = await res.json();
-        if (data.error) throw new Error(data.error);
-        if (data.geminiError && data.errorInfo) {
-          UI.showGeminiError(data.errorInfo);
-          return;
-        }
-        stores = data.stores || [];
-        UI.renderStores(stores, false);
-        UI.toast(`${stores.length}件のスーパーが見つかりました`, 'success');
-      } else {
-        await new Promise(r => setTimeout(r, 600));
+      // ── デモモード ──
+      if (DemoMode.isActive()) {
+        await new Promise(r => setTimeout(r, 800));
         stores = this._demoStores(address);
         UI.renderStores(stores, true);
-        UI.toast('GAS URLを設定すると実際のお店が検索できます', 'info', 6000);
+        UI.toast(`🎬 [デモ] ${stores.length}件のスーパーが見つかりました`, 'info');
+      } else {
+        const gasUrl = Config.get('gasUrl');
+        if (gasUrl) {
+          const params = new URLSearchParams({ action: 'findStores', address });
+          const res    = await fetch(`${gasUrl}?${params}`);
+          if (!res.ok) throw new Error(`通信エラー: ${res.status}`);
+          const data   = await res.json();
+          if (data.error) throw new Error(data.error);
+          if (data.geminiError && data.errorInfo) {
+            UI.showGeminiError(data.errorInfo);
+            return;
+          }
+          stores = data.stores || [];
+          UI.renderStores(stores, false);
+          UI.toast(`${stores.length}件のスーパーが見つかりました`, 'success');
+        } else {
+          await new Promise(r => setTimeout(r, 600));
+          stores = this._demoStores(address);
+          UI.renderStores(stores, true);
+          UI.toast('GAS URLを設定すると実際のお店が検索できます', 'info', 6000);
+        }
       }
 
       this.currentStores = stores;
@@ -123,9 +174,11 @@ const App = {
       const store = selected[i];
       UI.updateCollectingProgress(store.name, i, selected.length);
       try {
-        const items = gasUrl
-          ? await Scraper.fetchStorePrices(store)
-          : await this._demoFetch(store);
+        const items = DemoMode.isActive()
+          ? await this._demoFetch(store)
+          : gasUrl
+            ? await Scraper.fetchStorePrices(store)
+            : await this._demoFetch(store);
 
         if (items && items.geminiError) {
           UI.hideCollecting();
@@ -134,7 +187,9 @@ const App = {
           return;
         }
 
-        if (gasUrl && (items === null || !items || items.length === 0)) {
+        // デモモードまたはGAS未設定の場合はチラシなし判定しない
+        const isReal = !DemoMode.isActive() && gasUrl;
+        if (isReal && (items === null || !items || items.length === 0)) {
           noChirashi.push(store);
           results.push({ store, items: [], noChirashi: true });
         } else {
@@ -172,8 +227,9 @@ const App = {
     }
 
     const withChirashi = selected.length - noChirashi.length;
+    const demoTag = DemoMode.isActive() ? '🎬 [デモ] ' : '';
     UI.toast(
-      `${withChirashi}店のチラシから${merged.length}品目を収集${noChirashi.length > 0 ? `（${noChirashi.length}店はチラシなし）` : ''}`,
+      `${demoTag}${withChirashi}店のチラシから${merged.length}品目を収集${noChirashi.length > 0 ? `（${noChirashi.length}店はチラシなし）` : ''}`,
       'success', 6000
     );
     setTimeout(() => {
@@ -333,16 +389,25 @@ const Settings = {
     });
   },
 
+  // スケジュール時間リストを取得
+  getScheduleTimes() {
+    return this.load().scheduleTimes || [{ hour: 10, minute: 0 }];
+  },
+
+  // スケジュール時間リストを保存
+  saveScheduleTimes(times) {
+    this.save({ scheduleTimes: times });
+  },
+
   // 設定画面を初期化
   init() {
     this._initToggle();
+    this._initSchedule();
     this._initStoreSearchRows();
     this._initAddRowBtn();
     this._initCollectNowBtn();
     this._initSaveBtn();
     this.renderRegisteredStores();
-
-    // 最終収集時間を表示
     const cfg = this.load();
     this._updateLastCollectedDisplay(cfg.lastCollectedAt || null);
   },
@@ -357,8 +422,65 @@ const Settings = {
       const newVal = btn.dataset.on !== 'true';
       btn.dataset.on = newVal;
       this.saveAutoCollect(newVal);
-      UI.toast(`自動収集を${newVal ? 'ON' : 'OFF'}にしました`, 'success');
+      UI.toast(`スケジュール収集を${newVal ? 'ON' : 'OFF'}にしました`, 'success');
     });
+  },
+
+  // スケジュール時間UI初期化
+  _initSchedule() {
+    const times = this.getScheduleTimes();
+    times.forEach((t, i) => this._addScheduleRow(t.hour, t.minute, i === 0));
+    const addBtn = document.getElementById('btnAddSchedule');
+    if (!addBtn) return;
+    addBtn.addEventListener('click', () => {
+      const list  = document.getElementById('scheduleTimeList');
+      const count = list.querySelectorAll('.schedule-time-row').length;
+      if (count >= 5) { UI.toast('スケジュールは最大5つまでです', 'info'); return; }
+      this._addScheduleRow(10, 0, false);
+    });
+  },
+
+  // スケジュール時間行を追加
+  _addScheduleRow(hour, minute, isFirst) {
+    const list = document.getElementById('scheduleTimeList');
+    if (!list) return;
+    const index    = list.querySelectorAll('.schedule-time-row').length;
+    const row      = document.createElement('div');
+    row.className  = 'schedule-time-row';
+    const hourOpts = Array.from({ length: 24 }, (_, i) =>
+      `<option value="${i}" ${i === hour ? 'selected' : ''}>${String(i).padStart(2,'0')}</option>`
+    ).join('');
+    const minOpts  = [0,5,10,15,20,25,30,35,40,45,50,55].map(m =>
+      `<option value="${m}" ${m === minute ? 'selected' : ''}>${String(m).padStart(2,'0')}</option>`
+    ).join('');
+    row.innerHTML = `
+      <span class="schedule-label">⏰ 時刻 ${index + 1}</span>
+      <div class="schedule-time-selects">
+        <select class="schedule-select schedule-hour">${hourOpts}</select>
+        <span class="schedule-colon">:</span>
+        <select class="schedule-select schedule-minute">${minOpts}</select>
+      </div>
+      ${!isFirst ? `<button class="schedule-del-btn" title="削除">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+      </button>` : ''}
+    `;
+    if (!isFirst) {
+      row.querySelector('.schedule-del-btn').addEventListener('click', () => {
+        row.remove();
+        list.querySelectorAll('.schedule-time-row .schedule-label').forEach((el, i) => {
+          el.textContent = `⏰ 時刻 ${i + 1}`;
+        });
+      });
+    }
+    list.appendChild(row);
+  },
+
+  // スケジュール時間をUIから取得
+  _getScheduleTimesFromUI() {
+    return [...document.querySelectorAll('.schedule-time-row')].map(row => ({
+      hour:   parseInt(row.querySelector('.schedule-hour').value),
+      minute: parseInt(row.querySelector('.schedule-minute').value),
+    }));
   },
 
   // スーパー検索行の初期化
@@ -410,17 +532,55 @@ const Settings = {
     });
   },
 
-  // 保存ボタン（GAS URLとスプレッドシートURL）
+  // 保存ボタン（GAS URL・スプレッドシートURL・スケジュール・トリガー更新）
   _initSaveBtn() {
     const btn = document.getElementById('btnSaveConfig');
     if (!btn) return;
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const gasUrl   = document.getElementById('gasUrl').value.trim();
       const sheetUrl = document.getElementById('sheetUrl').value.trim();
       Config.save({ gasUrl, sheetUrl });
-      UI.toast('設定を保存しました', 'success');
-      document.getElementById('settingsOverlay').style.display = 'none';
       document.getElementById('btnOpenSheet').style.display = sheetUrl ? 'flex' : 'none';
+
+      // スケジュール時間を保存
+      const times  = this._getScheduleTimesFromUI();
+      this.saveScheduleTimes(times);
+
+      // GASにスケジュール設定を送信してトリガーを自動更新
+      if (gasUrl) {
+        btn.textContent = '保存・トリガー更新中...';
+        btn.disabled    = true;
+        try {
+          const autoOn = this.getAutoCollect();
+          const res    = await fetch(gasUrl, {
+            method: 'POST',
+            body: JSON.stringify({
+              action:        'updateTriggers',
+              scheduleTimes: times,
+              autoCollect:   autoOn ? 'ON' : 'OFF',
+            }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            UI.toast(
+              `設定を保存しました。トリガー${data.triggerCount}件を更新しました`,
+              'success', 5000
+            );
+          } else {
+            UI.toast('設定を保存しました（トリガー更新失敗）', 'info');
+          }
+        } catch (e) {
+          UI.toast('設定を保存しました（トリガー更新失敗）', 'info');
+          console.warn('トリガー更新失敗:', e);
+        } finally {
+          btn.textContent = '保存する';
+          btn.disabled    = false;
+        }
+      } else {
+        UI.toast('設定を保存しました', 'success');
+      }
+
+      document.getElementById('settingsOverlay').style.display = 'none';
     });
   },
 
