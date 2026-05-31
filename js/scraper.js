@@ -4,8 +4,8 @@
 
 const Scraper = {
 
-  // GASにチラシ価格取得を依頼
-  async fetchStorePrices(store) {
+  // GASにチラシ価格取得を依頼（searchLog付き）
+  async fetchStorePricesWithLog(store) {
     const gasUrl = Config.get('gasUrl');
     if (!gasUrl) throw new Error('Google Apps Script URLが設定されていません');
 
@@ -17,17 +17,21 @@ const Scraper = {
     });
 
     const response = await fetch(`${gasUrl}?${params.toString()}`, {
-      method: 'GET',
-      mode:   'cors',
+      method: 'GET', mode: 'cors',
     });
 
     if (!response.ok) throw new Error(`GASリクエスト失敗: ${response.status}`);
     const data = await response.json();
     if (data.error) throw new Error(data.error);
+    if (data.geminiError) return { items: { geminiError: true, errorInfo: data.errorInfo }, searchLog: data.searchLog };
+    if (!data.items || data.items.length === 0) return { items: null, searchLog: data.searchLog };
+    return { items: data.items, searchLog: data.searchLog };
+  },
 
-    // 空配列はチラシなしとしてnullを返す
-    if (!data.items || data.items.length === 0) return null;
-    return data.items;
+  // GASにチラシ価格取得を依頼
+  async fetchStorePrices(store) {
+    const result = await this.fetchStorePricesWithLog(store);
+    return result.items;
   },
 
   // スプレッドシートに保存
@@ -111,50 +115,60 @@ const Scraper = {
     });
   },
 
-  // 全店舗の価格データを商品名でマージ
+  // 全店舗の価格データを品目名でマージ
   mergeAllPrices(storeResults) {
     const itemMap = new Map();
 
     storeResults.forEach(({ store, items }) => {
       items.forEach(item => {
-        const key = item.name;
-        if (!itemMap.has(key)) {
-          itemMap.set(key, {
-            name: item.name,
+        // 品目名（itemName）でグループ化、なければname
+        const groupKey = item.itemName || item.name;
+        if (!itemMap.has(groupKey)) {
+          itemMap.set(groupKey, {
+            itemName: groupKey,
             category: item.category,
-            unit: item.unit,
-            stores: {},
+            stores:   {},
           });
         }
-        itemMap.get(key).stores[store.id] = {
-          price: item.price,
+        const group = itemMap.get(groupKey);
+        // 同じ店舗で複数商品がある場合は配列で保持
+        if (!group.stores[store.id]) {
+          group.stores[store.id] = [];
+        }
+        group.stores[store.id].push({
+          name:          item.name,
+          detail:        item.detail || '',
+          price:         item.price,
           originalPrice: item.originalPrice,
-          isSale: item.isSale,
-          storeName: store.name,
-        };
+          isSale:        item.isSale,
+          unit:          item.unit,
+          validDate:     item.validDate || '期間中',
+          storeName:     store.name,
+        });
       });
     });
 
-    // 最安値を計算
+    // 各品目の最安値を計算
     itemMap.forEach(item => {
-      let minPrice = Infinity;
+      let minPrice   = Infinity;
       let minStoreId = null;
-      Object.entries(item.stores).forEach(([storeId, data]) => {
-        if (data.price < minPrice) {
-          minPrice = data.price;
+      Object.entries(item.stores).forEach(([storeId, products]) => {
+        const cheapest = Math.min(...products.map(p => p.price));
+        if (cheapest < minPrice) {
+          minPrice   = cheapest;
           minStoreId = storeId;
         }
       });
-      item.minPrice = minPrice === Infinity ? null : minPrice;
+      item.minPrice   = minPrice === Infinity ? null : minPrice;
       item.minStoreId = minStoreId;
     });
 
     return Array.from(itemMap.values()).sort((a, b) => {
-      const catOrder = ['野菜・果物', '肉・鶏', '魚介類', '乳製品・卵', 'パン・米', '飲料', '冷凍食品', '調味料', '生活雑貨'];
+      const catOrder = ['野菜・果物','肉・鶏','魚介類','乳製品・卵','パン・米','飲料','冷凍食品','調味料','生活雑貨'];
       const ai = catOrder.indexOf(a.category);
       const bi = catOrder.indexOf(b.category);
       if (ai !== bi) return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-      return a.name.localeCompare(b.name, 'ja');
+      return a.itemName.localeCompare(b.itemName, 'ja');
     });
   },
 

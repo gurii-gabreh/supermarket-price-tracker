@@ -174,26 +174,26 @@ const App = {
       const store = selected[i];
       UI.updateCollectingProgress(store.name, i, selected.length);
       try {
-        const items = DemoMode.isActive()
-          ? await this._demoFetch(store)
+        const result = DemoMode.isActive()
+          ? { items: await this._demoFetch(store), searchLog: null }
           : gasUrl
-            ? await Scraper.fetchStorePrices(store)
-            : await this._demoFetch(store);
+            ? await Scraper.fetchStorePricesWithLog(store)
+            : { items: await this._demoFetch(store), searchLog: null };
 
-        if (items && items.geminiError) {
+        if (result.items && result.items.geminiError) {
           UI.hideCollecting();
-          UI.showGeminiError(items.errorInfo);
+          UI.showGeminiError(result.items.errorInfo);
           if (btn) btn.disabled = false;
           return;
         }
 
         // デモモードまたはGAS未設定の場合はチラシなし判定しない
         const isReal = !DemoMode.isActive() && gasUrl;
-        if (isReal && (items === null || !items || items.length === 0)) {
-          noChirashi.push(store);
+        if (isReal && (!result.items || result.items.length === 0)) {
+          noChirashi.push({ ...store, searchLog: result.searchLog });
           results.push({ store, items: [], noChirashi: true });
         } else {
-          results.push({ store, items: items || [] });
+          results.push({ store, items: result.items || [] });
         }
       } catch (e) {
         console.error(store.name, e);

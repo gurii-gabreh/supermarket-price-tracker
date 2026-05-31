@@ -310,7 +310,7 @@ const UI = {
   },
 
   // ══════════════════════════════════════
-  // モード1: 最安値ランキング表
+  // モード1: 最安値ランキング表（品目名グループ）
   // ══════════════════════════════════════
   _renderRankingTable(allItems, stores) {
     const items = this.currentCategory === 'all'
@@ -318,48 +318,52 @@ const UI = {
 
     const thead = document.getElementById('priceTableHead');
     const tbody = document.getElementById('priceTableBody');
-    const rankLabels = ['🥇 1位', '🥈 2位', '🥉 3位'];
 
     thead.innerHTML = `<tr>
-      <th>商品名</th>
-      ${rankLabels.map(l => `<th style="text-align:right">${l}</th>`).join('')}
+      <th>品目</th>
+      ${stores.map(s => `<th style="text-align:right">${this._e(s.name)}</th>`).join('')}
     </tr>`;
     tbody.innerHTML = '';
 
     items.forEach(item => {
-      const ranked = Object.entries(item.stores)
-        .map(([storeId, d]) => ({ storeId, ...d, store: stores.find(s => s.id === storeId) }))
-        .filter(d => d.store)
-        .sort((a, b) => a.price - b.price);
-
       const tr = document.createElement('tr');
-      const rankCells = rankLabels.map((_, i) => {
-        const d = ranked[i];
-        if (!d) return `<td class="price-cell"><span class="price-none">—</span></td>`;
-        const orig = d.originalPrice
-          ? `<span style="text-decoration:line-through;font-size:11px;color:var(--text3)">¥${d.originalPrice.toLocaleString()}</span> ` : '';
-        const sale = d.isSale ? '<span class="sale-badge">SALE</span>' : '';
-        const cls  = i === 0 ? 'best' : d.isSale ? 'sale' : 'normal';
-        return `<td class="price-cell">
-          <div>${orig}<span class="price-tag ${cls}">¥${d.price.toLocaleString()}</span>${sale}</div>
-          <div class="rank-store-name">${this._e(d.store.name)}</div>
-        </td>`;
+      const storeCells = stores.map(store => {
+        const products = item.stores[store.id];
+        if (!products || products.length === 0) {
+          return `<td class="price-cell"><span class="price-none">—</span></td>`;
+        }
+        // 同じ品目の複数商品を表示
+        const productHtml = products.map(p => {
+          const isMin  = item.minStoreId === store.id && p.price === item.minPrice;
+          const orig   = p.originalPrice
+            ? `<span style="text-decoration:line-through;font-size:11px;color:var(--text3)">¥${p.originalPrice.toLocaleString()}</span> ` : '';
+          const sale   = p.isSale ? '<span class="sale-badge">SALE</span>' : '';
+          const cls    = isMin ? 'best' : p.isSale ? 'sale' : 'normal';
+          const valid  = p.validDate && p.validDate !== '期間中'
+            ? `<span class="valid-date-badge">${this._e(p.validDate)}</span>` : '';
+          return `
+            <div class="product-entry">
+              <div class="product-detail">${this._e(p.detail || p.name)}</div>
+              <div>${orig}<span class="price-tag ${cls}">¥${p.price.toLocaleString()}</span>${sale}${valid}</div>
+            </div>
+          `;
+        }).join('<div class="product-separator"></div>');
+
+        return `<td class="price-cell">${productHtml}</td>`;
       }).join('');
 
       tr.innerHTML = `
         <td>
-          <div class="item-name">${this._e(item.name)}</div>
+          <div class="item-name">${this._e(item.itemName)}</div>
           <span class="item-cat">${this._e(item.category)}</span>
-          ${item.validDate && item.validDate !== '期間中'
-            ? `<span class="valid-date-badge">${this._e(item.validDate)}</span>` : ''}
         </td>
-        ${rankCells}
+        ${storeCells}
       `;
       tbody.appendChild(tr);
     });
 
     if (items.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--text3)">データがありません</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="${stores.length + 1}" style="text-align:center;padding:32px;color:var(--text3)">データがありません</td></tr>`;
     }
   },
 
@@ -497,7 +501,7 @@ const UI = {
   },
 
   // ══════════════════════════════════════
-  // モード4: チラシなし一覧
+  // モード4: チラシなし一覧（検索ログ付き）
   // ══════════════════════════════════════
   _renderNoChirashiTable() {
     const thead = document.getElementById('priceTableHead');
@@ -505,23 +509,37 @@ const UI = {
 
     thead.innerHTML = `<tr>
       <th>スーパー名</th>
-      <th>住所</th>
+      <th>検索先URL・キーワード</th>
+      <th>原因</th>
       <th>ステータス</th>
     </tr>`;
     tbody.innerHTML = '';
 
     if (this.noChirashiStores.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;padding:32px;color:var(--text3)">
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--text3)">
         チラシなしのお店はありません 🎉
       </td></tr>`;
       return;
     }
 
     this.noChirashiStores.forEach(store => {
-      const tr = document.createElement('tr');
+      const log = store.searchLog || {};
+      const tr  = document.createElement('tr');
       tr.innerHTML = `
-        <td><div class="item-name">${this._e(store.name)}</div></td>
-        <td style="color:var(--text2);font-size:13px">${this._e(store.address || '—')}</td>
+        <td>
+          <div class="item-name">${this._e(store.name)}</div>
+          <div style="font-size:11px;color:var(--text3)">${this._e(store.address || '—')}</div>
+        </td>
+        <td style="font-size:12px;color:var(--text2);max-width:200px;word-break:break-all">
+          ${log.searchedUrl
+            ? `<a href="${this._e(log.searchedUrl)}" target="_blank" style="color:var(--lime);text-decoration:none;" title="${this._e(log.searchedUrl)}">${this._e(log.searchedUrl.length > 50 ? log.searchedUrl.substring(0, 50) + '...' : log.searchedUrl)}</a>`
+            : '<span class="price-none">—</span>'}
+          ${log.imageCount !== undefined
+            ? `<div style="font-size:11px;color:var(--text3);margin-top:3px">画像取得数: ${log.imageCount}枚</div>` : ''}
+        </td>
+        <td style="font-size:12px;color:var(--text2);max-width:200px">
+          ${this._e(log.reason || '不明')}
+        </td>
         <td><span class="no-chirashi-badge">チラシ情報なし</span></td>
       `;
       tbody.appendChild(tr);
@@ -534,6 +552,61 @@ const UI = {
     el.textContent = msg;
     el.style.display = 'block';
     setTimeout(() => { el.style.display = 'none'; }, 6000);
+  },
+
+  // ── Geminiエラーをモーダルで表示 ──
+  showGeminiError(errorInfo) {
+    // 既存のエラーモーダルがあれば削除
+    const existing = document.getElementById('geminiErrorModal');
+    if (existing) existing.remove();
+
+    const icons = { quota: '⏳', busy: '🔄', unknown: '⚠️' };
+    const icon  = icons[errorInfo.errorType] || '⚠️';
+
+    const modal = document.createElement('div');
+    modal.id = 'geminiErrorModal';
+    modal.style.cssText = `
+      position: fixed; inset: 0; z-index: 500;
+      background: rgba(0,0,0,0.75); backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center;
+    `;
+    modal.innerHTML = `
+      <div style="
+        background: var(--bg3); border: 1px solid var(--border2);
+        border-radius: 20px; padding: 40px; max-width: 420px; width: 90%;
+        box-shadow: 0 40px 80px rgba(0,0,0,0.5);
+        animation: slideUp 0.25s ease;
+        text-align: center;
+      ">
+        <div style="font-size: 48px; margin-bottom: 16px;">${icon}</div>
+        <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 12px; color: var(--text);">
+          ${errorInfo.errorType === 'quota' ? 'リクエスト上限に達しました' : 'Geminiが混雑しています'}
+        </h3>
+        <p style="font-size: 14px; color: var(--text2); line-height: 1.7; margin-bottom: 20px;">
+          ${this._e(errorInfo.message)}
+        </p>
+        <div style="
+          background: var(--lime-dim); border: 1px solid rgba(184,255,87,0.3);
+          border-radius: 10px; padding: 14px; margin-bottom: 24px;
+        ">
+          <p style="font-size: 12px; color: var(--text2); margin-bottom: 4px;">次回アクセス推奨時間</p>
+          <p style="font-size: 20px; font-weight: 700; color: var(--lime); font-family: var(--font-mono);">
+            ${this._e(errorInfo.retryAt)}
+          </p>
+        </div>
+        <button id="closeGeminiError" style="
+          background: var(--lime); color: #080c10;
+          border: none; border-radius: 10px;
+          padding: 12px 32px; font-size: 14px; font-weight: 700;
+          cursor: pointer; font-family: var(--font-body);
+          transition: all 0.2s;
+        ">閉じる</button>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    document.getElementById('closeGeminiError').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   },
 
   _e(s) {
