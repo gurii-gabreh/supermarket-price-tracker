@@ -709,3 +709,16 @@ body.demo-active {
   transition: color 0.15s; margin-left: auto;
 }
 .schedule-del-btn:hover { color: var(--red); }
+
+/* ── 品目グループ表示 ── */
+.product-entry {
+  padding: 4px 0;
+}
+.product-detail {
+  font-size: 11px; color: var(--text2);
+  margin-bottom: 3px; line-height: 1.4;
+}
+.product-separator {
+  border-top: 1px solid var(--border);
+  margin: 6px 0;
+}
