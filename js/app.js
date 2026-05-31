@@ -552,14 +552,13 @@ const Settings = {
         btn.disabled    = true;
         try {
           const autoOn = this.getAutoCollect();
-          const res    = await fetch(gasUrl, {
-            method: 'POST',
-            body: JSON.stringify({
-              action:        'updateTriggers',
-              scheduleTimes: times,
-              autoCollect:   autoOn ? 'ON' : 'OFF',
-            }),
+          // GETリクエストでトリガー更新（POSTはCORSエラーになるため）
+          const params = new URLSearchParams({
+            action:        'updateTriggers',
+            scheduleTimes: JSON.stringify(times),
+            autoCollect:   autoOn ? 'ON' : 'OFF',
           });
+          const res  = await fetch(`${gasUrl}?${params}`);
           const data = await res.json();
           if (data.success) {
             UI.toast(
@@ -567,7 +566,7 @@ const Settings = {
               'success', 5000
             );
           } else {
-            UI.toast('設定を保存しました（トリガー更新失敗）', 'info');
+            UI.toast('設定を保存しました（トリガー更新失敗: ' + (data.error || '不明') + '）', 'info');
           }
         } catch (e) {
           UI.toast('設定を保存しました（トリガー更新失敗）', 'info');
