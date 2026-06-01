@@ -157,13 +157,33 @@ const UI = {
   _renderRanking(items, stores, noChirashiStores = []) {
     const medals = ['🥇','🥈','🥉','🏅'];
     const chirashiStores = stores.filter(s => !noChirashiStores.some(n => n.id === s.id));
+
     const scores = chirashiStores.map(s => {
       let wins = 0, savings = 0;
       items.forEach(item => {
-        if (item.minStoreId === s.id) {
+        // 各店舗の最安値を取得（配列対応）
+        const myProducts = item.stores[s.id];
+        if (!myProducts || myProducts.length === 0) return;
+        const myMin = Math.min(...myProducts.map(p => p.price));
+
+        // 全店舗の最安値を取得
+        let globalMin = Infinity;
+        Object.values(item.stores).forEach(products => {
+          if (!products || products.length === 0) return;
+          const storeMin = Math.min(...products.map(p => p.price));
+          if (storeMin < globalMin) globalMin = storeMin;
+        });
+
+        if (myMin === globalMin) {
           wins++;
-          const prices = Object.values(item.stores).map(d => d.price);
-          savings += Math.max(...prices) - item.minPrice;
+          // 他店最高値との差額を節約額とする
+          let globalMax = 0;
+          Object.values(item.stores).forEach(products => {
+            if (!products || products.length === 0) return;
+            const storeMin = Math.min(...products.map(p => p.price));
+            if (storeMin > globalMax) globalMax = storeMin;
+          });
+          savings += globalMax - myMin;
         }
       });
       return { store: s, wins, savings };
@@ -382,17 +402,22 @@ const UI = {
     );
 
     items.forEach(item => {
-      Object.entries(item.stores).forEach(([storeId, d]) => {
+      Object.entries(item.stores).forEach(([storeId, products]) => {
         if (!chirashiIds.has(storeId)) return;
-        if (d.originalPrice && d.originalPrice > d.price) {
-          const saving    = d.originalPrice - d.price;
-          const savingPct = Math.round(saving / d.originalPrice * 100);
-          const store     = this.allStores.find(s => s.id === storeId);
-          if (store) discountRows.push({
-            itemName: item.name, category: item.category, storeName: store.name,
-            price: d.price, originalPrice: d.originalPrice, saving, savingPct,
-          });
-        }
+        if (!products || products.length === 0) return;
+        // 配列内の各商品をチェック
+        products.forEach(p => {
+          if (p.originalPrice && p.originalPrice > p.price) {
+            const saving    = p.originalPrice - p.price;
+            const savingPct = Math.round(saving / p.originalPrice * 100);
+            const store     = this.allStores.find(s => s.id === storeId);
+            if (store) discountRows.push({
+              itemName: item.itemName, detail: p.detail || p.name,
+              category: item.category, storeName: store.name,
+              price: p.price, originalPrice: p.originalPrice, saving, savingPct,
+            });
+          }
+        });
       });
     });
 
@@ -402,7 +427,7 @@ const UI = {
     const tbody = document.getElementById('priceTableBody');
 
     thead.innerHTML = `<tr>
-      <th>商品名</th><th>スーパー</th>
+      <th>品目</th><th>詳細</th><th>スーパー</th>
       <th style="text-align:right">元値</th>
       <th style="text-align:right">特売価格</th>
       <th style="text-align:right">値引き額</th>
@@ -411,7 +436,7 @@ const UI = {
     tbody.innerHTML = '';
 
     if (discountRows.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text3)">値引き情報がありません</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)">値引き情報がありません</td></tr>`;
       return;
     }
 
@@ -420,6 +445,7 @@ const UI = {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td><div class="item-name">${medal}${this._e(row.itemName)}</div><span class="item-cat">${this._e(row.category)}</span></td>
+        <td style="color:var(--text2);font-size:12px">${this._e(row.detail)}</td>
         <td style="color:var(--text2);font-size:13px">${this._e(row.storeName)}</td>
         <td class="price-cell"><span style="text-decoration:line-through;color:var(--text3);font-size:13px">¥${row.originalPrice.toLocaleString()}</span></td>
         <td class="price-cell"><span class="price-tag sale">¥${row.price.toLocaleString()}</span></td>
@@ -440,16 +466,38 @@ const UI = {
 
     const storeItems = [];
     allItems.forEach(item => {
-      const d = item.stores[storeId];
-      if (d) storeItems.push({ ...item, storeData: d, isMinOverall: item.minStoreId === storeId });
+      const products = item.stores[storeId];
+      if (!products || products.length === 0) return;
+      // 各商品エントリを展開
+      products.forEach(p => {
+        // 他店の最安値を計算
+        let otherMin = null;
+        Object.entries(item.stores).forEach(([sid, prods]) => {
+          if (sid === storeId || !prods || prods.length === 0) return;
+          const sMin = Math.min(...prods.map(pr => pr.price));
+          if (otherMin === null || sMin < otherMin) otherMin = sMin;
+        });
+        storeItems.push({
+          itemName:     item.itemName,
+          category:     item.category,
+          detail:       p.detail || p.name,
+          price:        p.price,
+          originalPrice: p.originalPrice,
+          isSale:       p.isSale,
+          validDate:    p.validDate,
+          isMinOverall: item.minStoreId === storeId && p.price === item.minPrice,
+          otherMin,
+        });
+      });
     });
-    storeItems.sort((a, b) => a.storeData.price - b.storeData.price);
+    storeItems.sort((a, b) => a.price - b.price);
 
     const thead = document.getElementById('priceTableHead');
     const tbody = document.getElementById('priceTableBody');
 
     thead.innerHTML = `<tr>
-      <th>商品名</th>
+      <th>品目</th>
+      <th>詳細</th>
       <th style="text-align:right">${this._e(store.name)} の価格</th>
       <th style="text-align:right">他店最安値</th>
       <th style="text-align:right">比較</th>
@@ -457,24 +505,20 @@ const UI = {
     tbody.innerHTML = '';
 
     if (storeItems.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--text3)">この店舗のデータがありません</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text3)">この店舗のデータがありません</td></tr>`;
       return;
     }
 
     storeItems.forEach(item => {
-      const d    = item.storeData;
-      const orig = d.originalPrice
-        ? `<span style="text-decoration:line-through;font-size:11px;color:var(--text3)">¥${d.originalPrice.toLocaleString()}</span> ` : '';
-      const sale = d.isSale ? '<span class="sale-badge">SALE</span>' : '';
-
-      const otherPrices = Object.entries(item.stores)
-        .filter(([sid]) => sid !== storeId)
-        .map(([, data]) => data.price);
-      const otherMin = otherPrices.length ? Math.min(...otherPrices) : null;
+      const orig = item.originalPrice
+        ? `<span style="text-decoration:line-through;font-size:11px;color:var(--text3)">¥${item.originalPrice.toLocaleString()}</span> ` : '';
+      const sale = item.isSale ? '<span class="sale-badge">SALE</span>' : '';
+      const valid = item.validDate && item.validDate !== '期間中'
+        ? `<span class="valid-date-badge">${this._e(item.validDate)}</span>` : '';
 
       let compareCell = '<span class="price-none">—</span>';
-      if (otherMin !== null) {
-        const diff = d.price - otherMin;
+      if (item.otherMin !== null) {
+        const diff = item.price - item.otherMin;
         if (diff > 0)      compareCell = `<span class="compare-worse">＋¥${diff.toLocaleString()} 高い</span>`;
         else if (diff < 0) compareCell = `<span class="compare-best">－¥${Math.abs(diff).toLocaleString()} 安い ✓</span>`;
         else               compareCell = `<span style="color:var(--text2)">同額</span>`;
@@ -483,16 +527,15 @@ const UI = {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>
-          <div class="item-name">${this._e(item.name)}</div>
+          <div class="item-name">${this._e(item.itemName)}</div>
           <span class="item-cat">${this._e(item.category)}</span>
-          ${item.validDate && item.validDate !== '期間中'
-            ? `<span class="valid-date-badge">${this._e(item.validDate)}</span>` : ''}
+        </td>
+        <td style="font-size:12px;color:var(--text2)">${this._e(item.detail)}${valid}</td>
+        <td class="price-cell">
+          ${orig}<span class="price-tag ${item.isMinOverall ? 'best' : item.isSale ? 'sale' : 'normal'}">¥${item.price.toLocaleString()}</span>${sale}
         </td>
         <td class="price-cell">
-          ${orig}<span class="price-tag ${item.isMinOverall ? 'best' : d.isSale ? 'sale' : 'normal'}">¥${d.price.toLocaleString()}</span>${sale}
-        </td>
-        <td class="price-cell">
-          ${otherMin !== null ? `<span class="price-tag normal">¥${otherMin.toLocaleString()}</span>` : '<span class="price-none">—</span>'}
+          ${item.otherMin !== null ? `<span class="price-tag normal">¥${item.otherMin.toLocaleString()}</span>` : '<span class="price-none">—</span>'}
         </td>
         <td class="price-cell">${compareCell}</td>
       `;
