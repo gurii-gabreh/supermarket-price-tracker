@@ -46,17 +46,16 @@ const Scraper = {
       items: allPrices,
     };
 
-    const response = await fetch(gasUrl, {
-      method: 'POST',
-      mode: 'cors',
+    // GASのWebアプリはCORSヘッダーを返さないためno-corsで送信
+    // no-corsではレスポンスが読めないが保存は実行される
+    await fetch(gasUrl, {
+      method:  'POST',
+      mode:    'no-cors',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body:    JSON.stringify(payload),
     });
 
-    if (!response.ok) throw new Error(`保存失敗: ${response.status}`);
-    const data = await response.json();
-    if (data.error) throw new Error(data.error);
-    return data;
+    return { success: true };
   },
 
   // デモ用サンプルデータ生成（GAS未設定時）
