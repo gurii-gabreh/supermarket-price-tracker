@@ -112,6 +112,8 @@ body {
   background: var(--bg3); border: 1px solid var(--border2);
   border-radius: 20px; padding: 32px;
   width: min(520px, 90vw);
+  max-height: 85vh;
+  overflow-y: auto;
   box-shadow: 0 40px 80px rgba(0,0,0,0.6);
   animation: slideUp 0.25s ease;
 }
@@ -721,4 +723,36 @@ body.demo-active {
 .product-separator {
   border-top: 1px solid var(--border);
   margin: 6px 0;
+}
+
+/* ── メインタブ ── */
+.main-tabs {
+  display: flex; gap: 8px;
+  padding: 24px var(--page-pad) 0;
+  max-width: var(--max-w); margin: 0 auto;
+}
+.main-tab {
+  display: flex; align-items: center; gap: 7px;
+  padding: 10px 20px; border-radius: 99px;
+  font-size: 14px; font-weight: 600;
+  border: 1px solid var(--border2);
+  background: var(--bg2); color: var(--text2);
+  cursor: pointer; transition: all 0.2s;
+  font-family: var(--font-body);
+}
+.main-tab:hover { border-color: var(--lime); color: var(--text); }
+.main-tab.active {
+  background: var(--lime); color: #080c10;
+  border-color: var(--lime);
+}
+
+/* ── 履歴フィルターカード ── */
+.history-filter-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 16px; padding: 20px 24px;
+  max-width: var(--max-w); margin: 0 auto 24px;
+}
+.history-filter-row {
+  display: flex; gap: 16px; align-items: flex-end;
+  flex-wrap: wrap;
 }
