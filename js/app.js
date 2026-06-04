@@ -336,15 +336,16 @@ const Settings = {
     if (gasUrl) this._saveStoresToGas(stores);
   },
 
-  // GASにスーパー一覧を保存
+  // GASにスーパー一覧を保存（GET方式）
   async _saveStoresToGas(stores) {
     const gasUrl = Config.get('gasUrl');
     if (!gasUrl) return;
     try {
-      await fetch(gasUrl, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'saveStores', stores }),
+      const params = new URLSearchParams({
+        action: 'saveStores',
+        stores:  JSON.stringify(stores),
       });
+      await fetch(`${gasUrl}?${params}`);
     } catch (e) { console.warn('GAS保存失敗:', e); }
   },
 
@@ -700,4 +701,274 @@ _shakeStyle.textContent = `@keyframes shake {
 }`;
 document.head.appendChild(_shakeStyle);
 
-document.addEventListener('DOMContentLoaded', () => App.init());
+const _shakeStyle = document.createElement('style');
+_shakeStyle.textContent = `@keyframes shake {
+  0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)}
+  40%{transform:translateX(6px)} 60%{transform:translateX(-4px)}
+  80%{transform:translateX(4px)}
+}`;
+document.head.appendChild(_shakeStyle);
+
+// ===========================
+// History - 履歴タブ管理
+// ===========================
+const History = {
+  currentCategory: 'all',
+
+  init() {
+    this._bindTabSwitch();
+    this._loadStores();
+    this._bindEvents();
+  },
+
+  // タブ切り替え
+  _bindTabSwitch() {
+    document.querySelectorAll('.main-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.main-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const target = tab.dataset.tab;
+        document.getElementById('panelRealtime').style.display = target === 'realtime' ? 'block' : 'none';
+        document.getElementById('panelHistory').style.display  = target === 'history'  ? 'block' : 'none';
+        if (target === 'history') this._loadStores();
+      });
+    });
+  },
+
+  // スーパー一覧を読み込む（登録済み＋収集済み）
+  async _loadStores() {
+    const select  = document.getElementById('historyStoreSelect');
+    if (!select) return;
+    select.innerHTML = '<option value="">読み込み中...</option>';
+
+    try {
+      const gasUrl = Config.get('gasUrl');
+      const params = new URLSearchParams({ action: 'getRegisteredStoresFromSheet' });
+      const res    = await fetch(`${gasUrl}?${params}`);
+      const data   = await res.json();
+
+      // 登録スーパー＋設定スーパーをマージ
+      const regStores   = data.stores || [];
+      const localStores = Settings.getStores().map(s => s.name);
+      const allNames    = [...new Set([...localStores, ...regStores.map(s => s.name || s)])];
+
+      select.innerHTML = '<option value="">スーパーを選択</option>';
+      allNames.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+      });
+
+    } catch (e) {
+      select.innerHTML = '<option value="">取得失敗</option>';
+      console.warn('スーパー取得失敗:', e);
+    }
+  },
+
+  // イベントバインド
+  _bindEvents() {
+    const storeSelect = document.getElementById('historyStoreSelect');
+    const dateSelect  = document.getElementById('historyDateSelect');
+    const loadBtn     = document.getElementById('btnLoadHistory');
+
+    if (storeSelect) {
+      storeSelect.addEventListener('change', async () => {
+        const storeName = storeSelect.value;
+        if (!storeName) {
+          dateSelect.innerHTML = '<option value="">スーパーを選択してください</option>';
+          return;
+        }
+        await this._loadDates(storeName);
+      });
+    }
+
+    if (loadBtn) {
+      loadBtn.addEventListener('click', () => this._loadData());
+    }
+  },
+
+  // 収集日一覧を読み込む
+  async _loadDates(storeName) {
+    const dateSelect = document.getElementById('historyDateSelect');
+    dateSelect.innerHTML = '<option value="">読み込み中...</option>';
+
+    try {
+      const gasUrl = Config.get('gasUrl');
+      const params = new URLSearchParams({ action: 'getHistoryDates', storeName });
+      const res    = await fetch(`${gasUrl}?${params}`);
+      const data   = await res.json();
+      const dates  = data.dates || [];
+
+      if (dates.length === 0) {
+        dateSelect.innerHTML = '<option value="">データがありません</option>';
+        return;
+      }
+
+      dateSelect.innerHTML = '<option value="">日付を選択</option>';
+      dates.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d;
+        opt.textContent = d;
+        dateSelect.appendChild(opt);
+      });
+
+    } catch (e) {
+      dateSelect.innerHTML = '<option value="">取得失敗</option>';
+    }
+  },
+
+  // 履歴データを読み込んで表示
+  async _loadData() {
+    const storeName = document.getElementById('historyStoreSelect').value;
+    const date      = document.getElementById('historyDateSelect').value;
+
+    if (!storeName || !date) {
+      UI.toast('スーパーと日付を選択してください', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('btnLoadHistory');
+    btn.disabled = true;
+    btn.innerHTML = '<span style="opacity:.6">読み込み中...</span>';
+
+    try {
+      const gasUrl = Config.get('gasUrl');
+      const params = new URLSearchParams({ action: 'getHistoryData', storeName, date });
+      const res    = await fetch(`${gasUrl}?${params}`);
+      const data   = await res.json();
+
+      if (!data.items || data.items.length === 0) {
+        UI.toast('データが見つかりませんでした', 'info');
+        return;
+      }
+
+      // 店舗オブジェクトを作成
+      const storeNames = data.stores || [storeName];
+      const stores = storeNames.map((name, i) => ({ id: 'hist_' + i, name }));
+
+      // mergeAllPrices形式に変換
+      const storeResults = stores.map(store => ({
+        store,
+        items: data.items
+          .filter(item => item.storeName === store.name)
+          .map(item => ({
+            itemName:      item.name,
+            name:          item.name,
+            detail:        item.detail || item.unit || '',
+            price:         item.price,
+            originalPrice: item.originalPrice,
+            isSale:        item.isSale,
+            unit:          item.unit,
+            category:      item.category,
+            validDate:     item.validDate,
+            storeName:     store.name,
+          })),
+      }));
+
+      const merged = Scraper.mergeAllPrices(storeResults);
+
+      // 結果表示
+      this._renderHistory(merged, stores, date);
+      UI.toast(`${data.items.length}品目のデータを読み込みました`, 'success');
+
+    } catch (e) {
+      UI.toast(`読み込みエラー: ${e.message}`, 'error');
+      console.error(e);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/></svg> 読み込む';
+    }
+  },
+
+  // 履歴データを表示
+  _renderHistory(items, stores, date) {
+    document.getElementById('historyEmptyState').style.display   = 'none';
+    document.getElementById('historyResultsSection').style.display = 'block';
+    document.getElementById('historyResultDate').textContent = date;
+
+    // カテゴリタブ
+    this._renderCategoryTabs(items);
+
+    // テーブル
+    this._renderTable(items, stores);
+  },
+
+  _renderCategoryTabs(items) {
+    const tabsEl = document.getElementById('historyCategoryTabs');
+    tabsEl.innerHTML = '';
+    const cats = ['すべて', ...[...new Set(items.map(i => i.category))]];
+    const catRow = document.createElement('div');
+    catRow.className = 'cat-row';
+    cats.forEach(cat => {
+      const key   = cat === 'すべて' ? 'all' : cat;
+      const count = cat === 'すべて' ? items.length : items.filter(i => i.category === cat).length;
+      const btn   = document.createElement('button');
+      btn.className = 'filter-tab' + (key === this.currentCategory ? ' active' : '');
+      btn.textContent = `${cat} ${count}`;
+      btn.addEventListener('click', () => {
+        this.currentCategory = key;
+        catRow.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this._renderTable(items, stores);
+      });
+      catRow.appendChild(btn);
+    });
+    tabsEl.appendChild(catRow);
+  },
+
+  _renderTable(items, stores) {
+    const filtered = this.currentCategory === 'all'
+      ? items : items.filter(i => i.category === this.currentCategory);
+
+    const thead = document.getElementById('historyTableHead');
+    const tbody = document.getElementById('historyTableBody');
+
+    thead.innerHTML = `<tr>
+      <th>品目</th>
+      ${stores.map(s => `<th style="text-align:right">${UI._e(s.name)}</th>`).join('')}
+    </tr>`;
+    tbody.innerHTML = '';
+
+    filtered.forEach(item => {
+      const tr = document.createElement('tr');
+      const storeCells = stores.map(store => {
+        const products = item.stores[store.id];
+        if (!products || products.length === 0) {
+          return `<td class="price-cell"><span class="price-none">—</span></td>`;
+        }
+        const productHtml = products.map(p => {
+          const isMin = item.minStoreId === store.id && p.price === item.minPrice;
+          const orig  = p.originalPrice
+            ? `<span style="text-decoration:line-through;font-size:11px;color:var(--text3)">¥${p.originalPrice.toLocaleString()}</span> ` : '';
+          const sale  = p.isSale ? '<span class="sale-badge">SALE</span>' : '';
+          const cls   = isMin ? 'best' : p.isSale ? 'sale' : 'normal';
+          return `
+            <div class="product-entry">
+              <div class="product-detail">${UI._e(p.detail || p.name)}</div>
+              <div>${orig}<span class="price-tag ${cls}">¥${p.price.toLocaleString()}</span>${sale}</div>
+            </div>`;
+        }).join('<div class="product-separator"></div>');
+        return `<td class="price-cell">${productHtml}</td>`;
+      }).join('');
+
+      tr.innerHTML = `
+        <td>
+          <div class="item-name">${UI._e(item.itemName)}</div>
+          <span class="item-cat">${UI._e(item.category)}</span>
+        </td>
+        ${storeCells}
+      `;
+      tbody.appendChild(tr);
+    });
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="${stores.length + 1}" style="text-align:center;padding:32px;color:var(--text3)">データがありません</td></tr>`;
+    }
+  },
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  App.init();
+  History.init();
+});
