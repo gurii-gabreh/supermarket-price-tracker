@@ -332,7 +332,10 @@ const UI = {
 
     thead.innerHTML = `<tr>
       <th>品目</th>
-      ${stores.map(s => `<th style="text-align:right">${this._e(s.name)}</th>`).join('')}
+      ${stores.map(s => `<th style="text-align:right">
+        ${this._e(s.name)}
+        ${s.tokubaiUrl ? `<br><a href="${this._e(s.tokubaiUrl)}" target="_blank" style="font-size:10px;color:var(--lime);font-weight:400">チラシを見る↗</a>` : ''}
+      </th>`).join('')}
     </tr>`;
     tbody.innerHTML = '';
 
@@ -543,14 +546,15 @@ const UI = {
 
     thead.innerHTML = `<tr>
       <th>スーパー名</th>
-      <th>検索先URL・キーワード</th>
+      <th>チラシページURL</th>
+      <th>検索先URL</th>
       <th>原因</th>
       <th>ステータス</th>
     </tr>`;
     tbody.innerHTML = '';
 
     if (this.noChirashiStores.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--text3)">
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text3)">
         チラシなしのお店はありません 🎉
       </td></tr>`;
       return;
@@ -564,14 +568,19 @@ const UI = {
           <div class="item-name">${this._e(store.name)}</div>
           <div style="font-size:11px;color:var(--text3)">${this._e(store.address || '—')}</div>
         </td>
-        <td style="font-size:12px;color:var(--text2);max-width:200px;word-break:break-all">
+        <td style="font-size:12px;max-width:180px;word-break:break-all">
+          ${log.chirashiUrl
+            ? `<a href="${this._e(log.chirashiUrl)}" target="_blank" style="color:var(--lime);text-decoration:none;">${this._e(log.chirashiUrl.length > 40 ? log.chirashiUrl.substring(0, 40) + '...' : log.chirashiUrl)}</a>`
+            : '<span class="price-none">—</span>'}
+        </td>
+        <td style="font-size:12px;color:var(--text2);max-width:160px;word-break:break-all">
           ${log.searchedUrl
-            ? `<a href="${this._e(log.searchedUrl)}" target="_blank" style="color:var(--lime);text-decoration:none;" title="${this._e(log.searchedUrl)}">${this._e(log.searchedUrl.length > 50 ? log.searchedUrl.substring(0, 50) + '...' : log.searchedUrl)}</a>`
+            ? `<a href="${this._e(log.searchedUrl)}" target="_blank" style="color:var(--cyan);text-decoration:none;" title="${this._e(log.searchedUrl)}">${this._e(log.searchedUrl.length > 40 ? log.searchedUrl.substring(0, 40) + '...' : log.searchedUrl)}</a>`
             : '<span class="price-none">—</span>'}
           ${log.imageCount !== undefined
-            ? `<div style="font-size:11px;color:var(--text3);margin-top:3px">画像取得数: ${log.imageCount}枚</div>` : ''}
+            ? `<div style="font-size:11px;color:var(--text3);margin-top:3px">画像: ${log.imageCount}枚</div>` : ''}
         </td>
-        <td style="font-size:12px;color:var(--text2);max-width:200px">
+        <td style="font-size:12px;color:var(--text2);max-width:160px">
           ${this._e(log.reason || '不明')}
         </td>
         <td><span class="no-chirashi-badge">チラシ情報なし</span></td>
