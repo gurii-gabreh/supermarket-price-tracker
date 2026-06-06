@@ -3,10 +3,12 @@
 // ===========================
 
 const Config = {
+  // ▼ GAS URLをここに直接設定してください（Code.gsをデプロイしたURL）
+  GAS_URL: 'https://script.google.com/macros/s/YOUR_GAS_DEPLOYMENT_URL/exec',
+
   STORAGE_KEY: 'chirashi_tracker_config',
 
   defaults: {
-    gasUrl: '',
     sheetUrl: '',
   },
 
@@ -26,6 +28,8 @@ const Config = {
   },
 
   get(key) {
+    // GAS URLは直接埋め込みを優先
+    if (key === 'gasUrl') return this.GAS_URL;
     return this.load()[key];
   },
 };
