@@ -336,16 +336,17 @@ const Settings = {
     if (gasUrl) this._saveStoresToGas(stores);
   },
 
-  // GASにスーパー一覧を保存（GET方式）
+  // GASにスーパー一覧を保存（POST no-cors）
   async _saveStoresToGas(stores) {
     const gasUrl = Config.get('gasUrl');
     if (!gasUrl) return;
     try {
-      const params = new URLSearchParams({
-        action: 'saveStores',
-        stores:  JSON.stringify(stores),
+      await fetch(gasUrl, {
+        method:  'POST',
+        mode:    'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ action: 'saveStores', stores: stores }),
       });
-      await fetch(`${gasUrl}?${params}`);
     } catch (e) { console.warn('GAS保存失敗:', e); }
   },
 
@@ -548,14 +549,16 @@ const Settings = {
         btn.textContent = '保存中...';
         btn.disabled    = true;
         try {
-          // ① 登録スーパーをスプレッドシートに保存
+          // ① 登録スーパーをスプレッドシートに保存（全件まとめてPOST no-cors）
           const stores = this.getStores();
           if (stores.length > 0) {
-            const storeParams = new URLSearchParams({
-              action: 'saveStores',
-              stores: JSON.stringify(stores),
+            // データが大きいのでPOSTのno-corsで送信
+            await fetch(gasUrl, {
+              method:  'POST',
+              mode:    'no-cors',
+              headers: { 'Content-Type': 'application/json' },
+              body:    JSON.stringify({ action: 'saveStores', stores: stores }),
             });
-            await fetch(`${gasUrl}?${storeParams}`);
           }
 
           // ② トリガーを更新
