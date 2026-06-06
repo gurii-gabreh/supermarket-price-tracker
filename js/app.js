@@ -533,34 +533,41 @@ const Settings = {
     });
   },
 
-  // 保存ボタン（GAS URL・スプレッドシートURL・スケジュール・トリガー更新）
+  // 保存ボタン（スケジュール・スーパー登録・トリガー更新）
   _initSaveBtn() {
     const btn = document.getElementById('btnSaveConfig');
     if (!btn) return;
     btn.addEventListener('click', async () => {
-      const gasUrl   = document.getElementById('gasUrl').value.trim();
-      const sheetUrl = document.getElementById('sheetUrl').value.trim();
-      Config.save({ gasUrl, sheetUrl });
-      document.getElementById('btnOpenSheet').style.display = sheetUrl ? 'flex' : 'none';
+      const gasUrl = Config.get('gasUrl');
 
       // スケジュール時間を保存
-      const times  = this._getScheduleTimesFromUI();
+      const times = this._getScheduleTimesFromUI();
       this.saveScheduleTimes(times);
 
-      // GASにスケジュール設定を送信してトリガーを自動更新
       if (gasUrl) {
-        btn.textContent = '保存・トリガー更新中...';
+        btn.textContent = '保存中...';
         btn.disabled    = true;
         try {
+          // ① 登録スーパーをスプレッドシートに保存
+          const stores = this.getStores();
+          if (stores.length > 0) {
+            const storeParams = new URLSearchParams({
+              action: 'saveStores',
+              stores: JSON.stringify(stores),
+            });
+            await fetch(`${gasUrl}?${storeParams}`);
+          }
+
+          // ② トリガーを更新
           const autoOn = this.getAutoCollect();
-          // GETリクエストでトリガー更新（POSTはCORSエラーになるため）
-          const params = new URLSearchParams({
+          const triggerParams = new URLSearchParams({
             action:        'updateTriggers',
             scheduleTimes: JSON.stringify(times),
             autoCollect:   autoOn ? 'ON' : 'OFF',
           });
-          const res  = await fetch(`${gasUrl}?${params}`);
+          const res  = await fetch(`${gasUrl}?${triggerParams}`);
           const data = await res.json();
+
           if (data.success) {
             UI.toast(
               `設定を保存しました。トリガー${data.triggerCount}件を更新しました`,
@@ -570,8 +577,8 @@ const Settings = {
             UI.toast('設定を保存しました（トリガー更新失敗: ' + (data.error || '不明') + '）', 'info');
           }
         } catch (e) {
-          UI.toast('設定を保存しました（トリガー更新失敗）', 'info');
-          console.warn('トリガー更新失敗:', e);
+          UI.toast('設定を保存しました（一部失敗）', 'info');
+          console.warn('保存失敗:', e);
         } finally {
           btn.textContent = '保存する';
           btn.disabled    = false;
