@@ -12,10 +12,21 @@ const App = {
     UI.initSetupPanel();
     this._bindEvents();
     this._bindDemoMode();
-    const sheetUrl = Config.get('sheetUrl');
-    document.getElementById('btnOpenSheet').style.display = sheetUrl ? 'flex' : 'none';
+    this._updateSheetLink();
     // 設定画面初期化
     Settings.init();
+  },
+
+  _updateSheetLink() {
+    const sheetUrl = Config.get('sheetUrl');
+    const btn      = document.getElementById('btnOpenSheet');
+    if (!btn) return;
+    if (sheetUrl) {
+      btn.href          = sheetUrl;
+      btn.style.display = 'flex';
+    } else {
+      btn.style.display = 'none';
+    }
   },
 
   // ── デモモードのボタン制御 ──
@@ -75,11 +86,6 @@ const App = {
     document.getElementById('btnCollectPrices').addEventListener('click', () => this.collectPrices());
     document.getElementById('btnReCollect').addEventListener('click',    () => this.collectPrices());
     document.getElementById('btnExportSheet').addEventListener('click',  () => this.exportToSheet());
-    document.getElementById('btnOpenSheet').addEventListener('click', () => {
-      const url = Config.get('sheetUrl');
-      if (url) window.open(url, '_blank');
-      else UI.toast('設定でスプレッドシートURLを入力してください', 'info');
-    });
   },
 
   // ── スーパー検索 ──
@@ -539,7 +545,9 @@ const Settings = {
     const btn = document.getElementById('btnSaveConfig');
     if (!btn) return;
     btn.addEventListener('click', async () => {
-      const gasUrl = Config.get('gasUrl');
+      const gasUrl   = Config.get('gasUrl');
+      const sheetUrl = document.getElementById('sheetUrl')?.value.trim() || '';
+      if (sheetUrl) Config.save({ sheetUrl });
 
       // スケジュール時間を保存
       const times = this._getScheduleTimesFromUI();
@@ -591,6 +599,7 @@ const Settings = {
       }
 
       document.getElementById('settingsOverlay').style.display = 'none';
+      App._updateSheetLink();
     });
   },
 

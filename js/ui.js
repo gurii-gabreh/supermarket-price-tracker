@@ -27,22 +27,13 @@ const UI = {
   // ── 設定パネル ──
   initSetupPanel() {
     const cfg = Config.load();
-    if (cfg.gasUrl)   document.getElementById('gasUrl').value   = cfg.gasUrl;
-    if (cfg.sheetUrl) document.getElementById('sheetUrl').value = cfg.sheetUrl;
+    const sheetEl = document.getElementById('sheetUrl');
+    if (sheetEl && cfg.sheetUrl) sheetEl.value = cfg.sheetUrl;
 
     const overlay = document.getElementById('settingsOverlay');
     document.getElementById('btnToggleSetup').addEventListener('click', () => { overlay.style.display = 'flex'; });
     document.getElementById('drawerClose').addEventListener('click', () => { overlay.style.display = 'none'; });
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
-
-    document.getElementById('btnSaveConfig').addEventListener('click', () => {
-      const gasUrl   = document.getElementById('gasUrl').value.trim();
-      const sheetUrl = document.getElementById('sheetUrl').value.trim();
-      Config.save({ gasUrl, sheetUrl });
-      this.toast('設定を保存しました', 'success');
-      overlay.style.display = 'none';
-      document.getElementById('btnOpenSheet').style.display = sheetUrl ? 'flex' : 'none';
-    });
   },
 
   // ── スーパーカード ──
