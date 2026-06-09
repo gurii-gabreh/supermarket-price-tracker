@@ -205,7 +205,7 @@ const UI = {
       { key: 'ranking',     label: '🏆 最安値ランキング' },
       { key: 'discount',    label: '🔥 値引き率順' },
       { key: 'byStore',     label: '🏪 スーパー別' },
-      { key: 'noChirashi',  label: `🚫 チラシなし一覧 (${noChirashiStores.length})` },
+      { key: 'noChirashi',  label: `⚠️ チラシ収集未完了・なし一覧 (${noChirashiStores.length})` },
     ];
 
     const modeRow = document.createElement('div');
@@ -583,7 +583,7 @@ const UI = {
         <td style="font-size:12px;color:var(--text2);max-width:160px">
           ${this._e(log.reason || '不明')}
         </td>
-        <td><span class="no-chirashi-badge">チラシ情報なし</span></td>
+        <td><span class="${log.incomplete ? 'incomplete-badge' : 'no-chirashi-badge'}">${log.incomplete ? '収集未完了' : 'チラシ情報なし'}</span></td>
       `;
       tbody.appendChild(tr);
     });
