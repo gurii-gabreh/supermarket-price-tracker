@@ -200,6 +200,10 @@ const App = {
           results.push({ store, items: [], noChirashi: true });
         } else {
           results.push({ store, items: result.items || [] });
+          // 部分取得の場合もチラシなし一覧に追加（ただし結果は表示）
+          if (isReal && result.searchLog && result.searchLog.incomplete) {
+            noChirashi.push({ ...store, searchLog: result.searchLog });
+          }
         }
       } catch (e) {
         console.error(store.name, e);
