@@ -114,11 +114,11 @@
           <span class="field-hint" style="margin-top:8px;display:block">GASのトリガーで指定時刻に自動収集します。保存時にトリガーが自動更新されます。</span>
         </div>
 
-        <!-- 今すぐ収集 -->
+        <!-- 保存ボタン -->
         <div class="field-group">
-          <button class="primary-btn" id="btnCollectNow" style="width:100%">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-            今すぐ収集
+          <button class="primary-btn" id="btnSaveConfig" style="width:100%">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            保存する
           </button>
         </div>
       </div>
@@ -253,12 +253,20 @@
     <section class="stores-section" style="display:block">
       <div class="history-filter-card">
         <div class="history-filter-row">
+          <!-- 住所フィルター -->
           <div class="field-group" style="margin:0;flex:1">
-            <label class="field-label">スーパー</label>
-            <select id="historyStoreSelect" class="field-input">
+            <label class="field-label">住所</label>
+            <select id="historyAddressSelect" class="field-input">
               <option value="">読み込み中...</option>
             </select>
           </div>
+          <!-- スーパー名フィルター -->
+          <div class="field-group" style="margin:0;flex:1;position:relative">
+            <label class="field-label">スーパー名</label>
+            <input type="text" id="historyStoreKeyword" class="field-input" placeholder="キーワードで絞り込み...">
+            <div id="historyStoreSuggestions" class="store-suggestions"></div>
+          </div>
+          <!-- 日付フィルター -->
           <div class="field-group" style="margin:0;flex:1">
             <label class="field-label">収集日</label>
             <select id="historyDateSelect" class="field-input">
