@@ -729,10 +729,12 @@ document.head.appendChild(_shakeStyle);
 // ===========================
 const History = {
   currentCategory: 'all',
+  filterOptions:   { addresses: [], addressMap: {}, allStores: [] },
+  selectedStore:   '',
 
   init() {
     this._bindTabSwitch();
-    this._loadStores();
+    this._loadFilterOptions();
     this._bindEvents();
   },
 
@@ -745,56 +747,113 @@ const History = {
         const target = tab.dataset.tab;
         document.getElementById('panelRealtime').style.display = target === 'realtime' ? 'block' : 'none';
         document.getElementById('panelHistory').style.display  = target === 'history'  ? 'block' : 'none';
-        if (target === 'history') this._loadStores();
+        if (target === 'history') this._loadFilterOptions();
       });
     });
   },
 
-  // スーパー一覧を読み込む（登録済み＋収集済み）
-  async _loadStores() {
-    const select  = document.getElementById('historyStoreSelect');
-    if (!select) return;
-    select.innerHTML = '<option value="">読み込み中...</option>';
+  // フィルター選択肢を読み込む
+  async _loadFilterOptions() {
+    const addressSelect = document.getElementById('historyAddressSelect');
+    const keyword       = document.getElementById('historyStoreKeyword');
+    if (!addressSelect) return;
+
+    addressSelect.innerHTML = '<option value="">読み込み中...</option>';
 
     try {
       const gasUrl = Config.get('gasUrl');
-      const params = new URLSearchParams({ action: 'getRegisteredStoresFromSheet' });
+      const params = new URLSearchParams({ action: 'getFilterOptions' });
       const res    = await fetch(`${gasUrl}?${params}`);
       const data   = await res.json();
 
-      // 登録スーパー＋設定スーパーをマージ
-      const regStores   = data.stores || [];
-      const localStores = Settings.getStores().map(s => s.name);
-      const allNames    = [...new Set([...localStores, ...regStores.map(s => s.name || s)])];
+      this.filterOptions = data;
 
-      select.innerHTML = '<option value="">スーパーを選択</option>';
-      allNames.forEach(name => {
+      // 住所ドロップダウン
+      addressSelect.innerHTML = '<option value="">すべての住所</option>';
+      (data.addresses || []).forEach(addr => {
         const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
-        select.appendChild(opt);
+        opt.value = addr;
+        opt.textContent = addr;
+        addressSelect.appendChild(opt);
       });
 
+      // スーパー名サジェストを初期化
+      this._updateStoreSuggestions('');
+
     } catch (e) {
-      select.innerHTML = '<option value="">取得失敗</option>';
-      console.warn('スーパー取得失敗:', e);
+      addressSelect.innerHTML = '<option value="">取得失敗</option>';
+      console.warn('フィルター取得失敗:', e);
     }
+  },
+
+  // スーパー名サジェストを更新
+  _updateStoreSuggestions(keyword) {
+    const address    = document.getElementById('historyAddressSelect')?.value || '';
+    const candidates = address
+      ? (this.filterOptions.addressMap?.[address] || [])
+      : (this.filterOptions.allStores || []);
+
+    const filtered = keyword
+      ? candidates.filter(s => s.includes(keyword))
+      : candidates;
+
+    const box = document.getElementById('historyStoreSuggestions');
+    if (!box) return;
+
+    box.innerHTML = '';
+    if (filtered.length === 0) {
+      box.style.display = 'none';
+      return;
+    }
+
+    filtered.forEach(store => {
+      const item = document.createElement('div');
+      item.className = 'store-suggestion-item' + (store === this.selectedStore ? ' selected' : '');
+      item.textContent = store;
+      item.addEventListener('click', () => {
+        this.selectedStore = store;
+        document.getElementById('historyStoreKeyword').value = store;
+        box.style.display = 'none';
+        this._loadDates(store);
+      });
+      box.appendChild(item);
+    });
+
+    box.style.display = filtered.length > 0 ? 'block' : 'none';
   },
 
   // イベントバインド
   _bindEvents() {
-    const storeSelect = document.getElementById('historyStoreSelect');
-    const dateSelect  = document.getElementById('historyDateSelect');
-    const loadBtn     = document.getElementById('btnLoadHistory');
+    const addressSelect = document.getElementById('historyAddressSelect');
+    const keyword       = document.getElementById('historyStoreKeyword');
+    const dateSelect    = document.getElementById('historyDateSelect');
+    const loadBtn       = document.getElementById('btnLoadHistory');
 
-    if (storeSelect) {
-      storeSelect.addEventListener('change', async () => {
-        const storeName = storeSelect.value;
-        if (!storeName) {
-          dateSelect.innerHTML = '<option value="">スーパーを選択してください</option>';
-          return;
-        }
-        await this._loadDates(storeName);
+    // 住所変更時
+    if (addressSelect) {
+      addressSelect.addEventListener('change', () => {
+        this.selectedStore = '';
+        if (keyword) keyword.value = '';
+        this._updateStoreSuggestions('');
+        if (dateSelect) dateSelect.innerHTML = '<option value="">スーパーを選択してください</option>';
+      });
+    }
+
+    // キーワード入力時
+    if (keyword) {
+      keyword.addEventListener('input', () => {
+        this.selectedStore = '';
+        this._updateStoreSuggestions(keyword.value);
+      });
+      keyword.addEventListener('focus', () => {
+        this._updateStoreSuggestions(keyword.value);
+      });
+      // フォーカスが外れたらサジェストを閉じる
+      keyword.addEventListener('blur', () => {
+        setTimeout(() => {
+          const box = document.getElementById('historyStoreSuggestions');
+          if (box) box.style.display = 'none';
+        }, 200);
       });
     }
 
@@ -835,7 +894,7 @@ const History = {
 
   // 履歴データを読み込んで表示
   async _loadData() {
-    const storeName = document.getElementById('historyStoreSelect').value;
+    const storeName = this.selectedStore || document.getElementById('historyStoreKeyword')?.value.trim();
     const date      = document.getElementById('historyDateSelect').value;
 
     if (!storeName || !date) {
