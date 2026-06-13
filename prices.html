@@ -49,6 +49,9 @@
         </button>
       </div>
       <p class="settings-desc">設定はブラウザに保存されます。GAS URLなしでもデモモードで試せます。</p>
+      <p class="settings-desc" style="color:#a6e3a1;margin-top:4px">
+        📍 取得したい住所とスーパーを登録してください。登録後「保存する」を押すとスプレッドシートに反映されます。
+      </p>
 
       <div class="settings-fields">
         <!-- スプレッドシートURL -->
@@ -119,6 +122,13 @@
           <button class="primary-btn" id="btnSaveConfig" style="width:100%">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
             保存する
+          </button>
+        </div>
+        <!-- クリアボタン -->
+        <div class="field-group">
+          <button class="ghost-btn" id="btnClearFilter" style="width:100%;color:#f38ba8;border-color:rgba(243,139,168,0.4)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            検索フィルターをクリア
           </button>
         </div>
       </div>
