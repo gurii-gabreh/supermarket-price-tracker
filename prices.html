@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>食品価格一覧 - スーパーの食品価格比較アプリ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,500;9..40,700&family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="bg-glow bg-glow-1"></div>
+  <div class="bg-glow bg-glow-2"></div>
+  <div class="bg-grid"></div>
+
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-mark">K</div>
+        <div class="logo-text">
+          <span class="logo-main">KAKAKU</span>
+          <span class="logo-sub">価格比較トラッカー</span>
+        </div>
+      </div>
+      <nav class="header-nav">
+        <button class="nav-btn demo-btn" id="btnDemoMode">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          デモモード
+        </button>
+        <button class="nav-btn" id="btnToggleSetup">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+          設定
+        </button>
+        <a class="nav-btn highlighted" id="btnOpenSheet" style="display:none" target="_blank" rel="noopener">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+          価格履歴
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- 設定ドロワー -->
+  <div class="settings-overlay" id="settingsOverlay" style="display:none">
+    <div class="settings-panel">
+      <div class="settings-header">
+        <h3>設定</h3>
+        <button class="close-btn" id="drawerClose">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <p class="settings-desc">設定はブラウザに保存されます。GAS URLなしでもデモモードで試せます。</p>
+
+      <div class="settings-fields">
+        <!-- スプレッドシートURL -->
+        <div class="field-group">
+          <label class="field-label">スプレッドシート URL</label>
+          <input type="text" id="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/..." class="field-input">
+          <span class="field-hint">「価格履歴」ボタンのリンク先になります</span>
+        </div>
+
+        <!-- 区切り線 -->
+        <div class="settings-divider"></div>
+
+        <!-- 登録スーパー -->
+        <div class="field-group">
+          <label class="field-label">登録スーパー</label>
+          <span class="field-hint" style="margin-bottom:12px;display:block">住所を入力してスーパーを検索・登録してください</span>
+
+          <!-- スーパー検索欄（最初は1欄） -->
+          <div id="storeSearchRows">
+            <div class="store-search-row" data-row="0">
+              <div class="store-search-input-wrap">
+                <input type="text" class="field-input store-address-input" placeholder="例: 栃木県足利市小俣町">
+                <button class="ghost-btn store-search-btn">検索</button>
+              </div>
+              <!-- 候補リスト -->
+              <div class="store-candidates" style="display:none"></div>
+            </div>
+          </div>
+          <button class="add-row-btn" id="btnAddStoreRow">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            検索欄を追加
+          </button>
+        </div>
+
+        <!-- 登録済みスーパー一覧 -->
+        <div class="field-group" id="registeredStoresSection" style="display:none">
+          <label class="field-label">登録済みスーパー</label>
+          <div id="registeredStoresList"></div>
+        </div>
+
+        <!-- 区切り線 -->
+        <div class="settings-divider"></div>
+
+        <!-- スケジュール収集設定 -->
+        <div class="field-group">
+          <label class="field-label">スケジュール収集</label>
+          <div class="auto-collect-row" style="margin-bottom:12px">
+            <div class="auto-collect-info">
+              <span class="auto-collect-label">スケジュール収集</span>
+              <span class="auto-collect-sub" id="lastCollectedAt">最終収集: 未収集</span>
+            </div>
+            <button class="toggle-btn" id="btnAutoCollect" data-on="false">
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+
+          <!-- スケジュール時間リスト -->
+          <div id="scheduleTimeList"></div>
+          <button class="add-row-btn" id="btnAddSchedule">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            時間を追加（最大5つ）
+          </button>
+          <span class="field-hint" style="margin-top:8px;display:block">GASのトリガーで指定時刻に自動収集します。保存時にトリガーが自動更新されます。</span>
+        </div>
+
+        <!-- 保存ボタン -->
+        <div class="field-group">
+          <button class="primary-btn" id="btnSaveConfig" style="width:100%">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            保存する
+          </button>
+        </div>
+      </div>
+
+      <button class="save-btn" id="btnSaveConfig">保存する</button>
+    </div>
+  </div>
+
+  <!-- デモモードバナー -->
+  <div id="demoBanner" style="display:none">
+    <div class="demo-banner">
+      <span class="demo-banner-icon">🎬</span>
+      <span class="demo-banner-text">デモモード中 — すべてサンプルデータで動作しています</span>
+      <button class="demo-banner-close" id="btnExitDemo">終了</button>
+    </div>
+  </div>
+
+  <main class="main">
+    <!-- メインタブ切り替え -->
+    <div class="main-tabs" id="mainTabs">
+      <button class="main-tab" id="tabRealtime" data-tab="realtime">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        リアルタイム価格一覧
+      </button>
+      <button class="main-tab active" id="tabHistory" data-tab="history">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
+        食品価格一覧
+      </button>
+    </div>
+
+    <!-- リアルタイム収集タブ -->
+    <div id="panelRealtime" style="display:none">
+    <!-- ヒーロー検索 -->
+    <section class="hero">
+      <div class="hero-eyebrow">SMART PRICE TRACKER</div>
+      <h1 class="hero-title">近くのスーパーの<br><span class="hero-accent">食品価格</span>を比較</h1>
+      <p class="hero-desc">住所を入力するだけ。チラシ情報を自動収集して価格を比較します。</p>
+      <div class="search-container">
+        <div class="search-field" id="searchField">
+          <svg class="search-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input type="text" id="addressInput" class="search-input" placeholder="例：栃木県佐野市高砂町...">
+        </div>
+        <button class="search-btn" id="btnSearchStores">
+          スーパーを探す
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+      <p class="search-note">※ GAS URL未設定の場合はデモデータで動作します</p>
+    </section>
+
+    <!-- スーパー一覧 -->
+    <section class="stores-section" id="storesSection" style="display:none">
+      <div class="section-header">
+        <div class="section-title-row">
+          <h2 class="section-title">近くのスーパー</h2>
+          <span class="count-chip" id="storeCount">0件</span>
+        </div>
+        <div class="section-actions">
+          <button class="ghost-btn" id="btnSelectAll">すべて選択</button>
+          <button class="primary-btn" id="btnCollectPrices">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            チラシ収集
+          </button>
+        </div>
+      </div>
+      <div class="stores-grid" id="storesGrid"></div>
+    </section>
+
+    <!-- 収集中 -->
+    <div class="loading-overlay" id="collectingOverlay" style="display:none">
+      <div class="loading-card">
+        <div class="loading-rings">
+          <div class="ring ring-1"></div>
+          <div class="ring ring-2"></div>
+          <div class="ring ring-3"></div>
+        </div>
+        <p class="loading-title">チラシ情報を収集中</p>
+        <p class="loading-store" id="collectingStoreName">—</p>
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="progressBar"></div>
+        </div>
+        <p class="loading-count" id="progressText">0 / 0</p>
+      </div>
+    </div>
+
+    <!-- 価格比較結果 -->
+    <section class="results-section" id="resultsSection" style="display:none">
+      <div class="section-header">
+        <div class="section-title-row">
+          <h2 class="section-title">価格比較結果</h2>
+          <span class="time-chip" id="resultDate"></span>
+        </div>
+        <div class="section-actions">
+          <button class="ghost-btn" id="btnReCollect">再収集</button>
+          <button class="primary-btn" id="btnExportSheet">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            シートに保存
+          </button>
+        </div>
+      </div>
+
+      <div class="ranking-strip" id="bestDealSection"></div>
+      <div class="filter-tabs" id="categoryTabs"></div>
+
+      <div class="table-container">
+        <table class="price-table">
+          <thead id="priceTableHead"></thead>
+          <tbody id="priceTableBody"></tbody>
+        </table>
+      </div>
+      <div class="save-feedback" id="saveStatus" style="display:none"></div>
+    </section>
+
+    <!-- 空状態 -->
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon-wrap">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+      </div>
+      <p class="empty-title">住所を入力してください</p>
+      <p class="empty-desc">近くのスーパーを探してチラシ価格を一括収集します</p>
+    </div>
+  </div><!-- /panelRealtime -->
+
+  <!-- 履歴タブ -->
+  <div id="panelHistory" style="display:block">
+    <section class="hero" style="padding-bottom:20px">
+      <div class="hero-eyebrow">HISTORY VIEWER</div>
+      <h1 class="hero-title" style="font-size:clamp(28px,5vw,48px)">収集済みデータを<br><span class="hero-accent">確認する</span></h1>
+      <p class="hero-desc">スプレッドシートに保存された価格データを表示します。</p>
+    </section>
+
+    <section class="stores-section" style="display:block">
+      <div class="history-filter-card">
+        <div class="history-filter-row">
+          <!-- 住所フィルター -->
+          <div class="field-group" style="margin:0;flex:1">
+            <label class="field-label">住所</label>
+            <select id="historyAddressSelect" class="field-input">
+              <option value="">読み込み中...</option>
+            </select>
+          </div>
+          <!-- スーパー名フィルター -->
+          <div class="field-group" style="margin:0;flex:1;position:relative">
+            <label class="field-label">スーパー名</label>
+            <input type="text" id="historyStoreKeyword" class="field-input" placeholder="キーワードで絞り込み...">
+            <div id="historyStoreSuggestions" class="store-suggestions"></div>
+          </div>
+          <!-- 日付フィルター -->
+          <div class="field-group" style="margin:0;flex:1">
+            <label class="field-label">収集日</label>
+            <select id="historyDateSelect" class="field-input">
+              <option value="">スーパーを選択してください</option>
+            </select>
+          </div>
+          <button class="primary-btn" id="btnLoadHistory" style="align-self:flex-end;white-space:nowrap">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/></svg>
+            読み込む
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 履歴結果 -->
+    <section class="results-section" id="historyResultsSection" style="display:none">
+      <div class="section-header">
+        <div class="section-title-row">
+          <h2 class="section-title">価格履歴</h2>
+          <span class="time-chip" id="historyResultDate"></span>
+        </div>
+      </div>
+      <div class="ranking-strip" id="historyBestDealSection"></div>
+      <div class="filter-tabs" id="historyCategoryTabs"></div>
+      <div class="table-container">
+        <table class="price-table">
+          <thead id="historyTableHead"></thead>
+          <tbody id="historyTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="empty-state" id="historyEmptyState">
+      <div class="empty-icon-wrap">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
+      </div>
+      <p class="empty-title">スーパーと日付を選択してください</p>
+      <p class="empty-desc">収集済みのデータを表示します</p>
+    </div>
+  </div><!-- /panelHistory -->
+  </main>
+
+  <div class="toast-wrap" id="toastContainer"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/scraper.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
