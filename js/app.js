@@ -13,8 +13,55 @@ const App = {
     this._bindEvents();
     this._bindDemoMode();
     this._updateSheetLink();
+    this._bindCommandModal();
+    this._bindClearFilter();
     // 設定画面初期化
     Settings.init();
+  },
+
+  // コマンドモーダル
+  _bindCommandModal() {
+    const btn      = document.getElementById('btnGetPrice');
+    const modal    = document.getElementById('commandModal');
+    const closeBtn = document.getElementById('btnCloseModal');
+    const closeBtn2 = document.getElementById('btnCloseModal2');
+    if (!btn || !modal) return;
+
+    btn.addEventListener('click', () => {
+      modal.style.display = 'flex';
+    });
+    [closeBtn, closeBtn2].forEach(b => {
+      if (b) b.addEventListener('click', () => {
+        modal.style.display = 'none';
+      });
+    });
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.style.display = 'none';
+    });
+  },
+
+  // フィルタークリア
+  _bindClearFilter() {
+    const btn = document.getElementById('btnClearFilter');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      // 住所フィルターをリセット
+      const addressSelect = document.getElementById('historyAddressSelect');
+      const keyword       = document.getElementById('historyStoreKeyword');
+      const dateSelect    = document.getElementById('historyDateSelect');
+      if (addressSelect) addressSelect.value = '';
+      if (keyword) keyword.value = '';
+      if (dateSelect) dateSelect.innerHTML = '<option value="">スーパーを選択してください</option>';
+
+      // 表示中の価格一覧をクリア
+      const historyResult = document.getElementById('historyResult');
+      if (historyResult) historyResult.innerHTML = '';
+
+      // 設定画面を閉じる
+      document.getElementById('settingsOverlay').style.display = 'none';
+
+      UI.toast('フィルターをクリアしました', 'success');
+    });
   },
 
   _updateSheetLink() {
