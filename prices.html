@@ -23,18 +23,6 @@
         </div>
       </div>
       <nav class="header-nav">
-        <button class="nav-btn demo-btn" id="btnDemoMode">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-          デモモード
-        </button>
-        <button class="nav-btn" id="btnToggleSetup">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
-          設定
-        </button>
-        <a class="nav-btn highlighted" id="btnOpenSheet" style="display:none" target="_blank" rel="noopener">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-          価格履歴
-        </a>
       </nav>
     </div>
   </header>
@@ -147,14 +135,12 @@
   </div>
 
   <main class="main">
-    <!-- メインタブ切り替え -->
-    <div class="main-tabs" id="mainTabs">
+    <!-- タブ非表示（食品価格一覧のみ表示） -->
+    <div class="main-tabs" id="mainTabs" style="display:none">
       <button class="main-tab" id="tabRealtime" data-tab="realtime">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         リアルタイム価格一覧
       </button>
       <button class="main-tab active" id="tabHistory" data-tab="history">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
         食品価格一覧
       </button>
     </div>
