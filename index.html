@@ -326,19 +326,17 @@
           </div>
         </div>
 
-        <!-- 2行目: スーパー複数選択 -->
+        <!-- 2行目: スーパー複数選択（プルダウン） -->
         <div class="field-group" style="margin:0 0 12px 0">
           <label class="field-label">スーパー（複数選択可）</label>
-          <div id="historyStoreCheckboxes" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--text);font-size:13px">
-              <input type="checkbox" id="checkAllStores" style="accent-color:#b4f082">
-              <span style="color:#b4f082;font-weight:600">全て選択</span>
-            </label>
-          </div>
+          <div id="storeMultiSelect" style="margin-top:6px"></div>
         </div>
 
-        <!-- 品種チェックボックス（読み込み後に表示） -->
-        <div id="historyItemCheckboxes" style="display:none;margin-bottom:12px"></div>
+        <!-- 品種複数選択（読み込み後に表示） -->
+        <div id="itemMultiSelectWrap" style="display:none;margin-bottom:12px">
+          <label class="field-label" style="margin-bottom:6px;display:block">品種（複数選択可）</label>
+          <div id="itemMultiSelect"></div>
+        </div>
 
         <!-- 3行目: 表示モード・読み込みボタン -->
         <div class="history-filter-row">
@@ -349,7 +347,7 @@
                 通常表示
               </button>
               <button class="mode-btn" id="btnModeCheapest" style="flex:1">
-                ★ カテゴリ別最安値
+                ★ 品種別最安値
               </button>
             </div>
           </div>

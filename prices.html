@@ -262,6 +262,18 @@
 
     <section class="stores-section" style="display:block">
       <div class="history-filter-card">
+
+        <!-- 使い方説明 -->
+        <div style="background:rgba(137,180,250,0.08);border:1px solid rgba(137,180,250,0.2);border-radius:10px;padding:14px 16px;margin-bottom:16px">
+          <p style="color:#89b4fa;font-size:13px;font-weight:700;margin-bottom:8px">📖 使い方</p>
+          <ol style="color:#a6adc8;font-size:12px;line-height:1.8;margin:0;padding-left:18px">
+            <li>住所・収集日・カテゴリを選択してください（任意）</li>
+            <li>比較したいスーパーにチェックを入れてください</li>
+            <li>「読み込む」ボタンを押してデータを取得してください</li>
+            <li>読み込み後、品種を複数選択して絞り込みができます</li>
+            <li>表示モードで「★ カテゴリ別最安値」を選ぶとスーパー間の最安値を比較できます</li>
+          </ol>
+        </div>
         <!-- 1行目: 住所・日付 -->
         <div class="history-filter-row" style="margin-bottom:12px">
           <!-- 住所フィルター -->
@@ -297,19 +309,17 @@
           </div>
         </div>
 
-        <!-- 2行目: スーパー複数選択 -->
+        <!-- 2行目: スーパー複数選択（プルダウン） -->
         <div class="field-group" style="margin:0 0 12px 0">
           <label class="field-label">スーパー（複数選択可）</label>
-          <div id="historyStoreCheckboxes" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--text);font-size:13px">
-              <input type="checkbox" id="checkAllStores" style="accent-color:#b4f082">
-              <span style="color:#b4f082;font-weight:600">全て選択</span>
-            </label>
-          </div>
+          <div id="storeMultiSelect" style="margin-top:6px"></div>
         </div>
 
-        <!-- 品種チェックボックス（読み込み後に表示） -->
-        <div id="historyItemCheckboxes" style="display:none;margin-bottom:12px"></div>
+        <!-- 品種複数選択（読み込み後に表示） -->
+        <div id="itemMultiSelectWrap" style="display:none;margin-bottom:12px">
+          <label class="field-label" style="margin-bottom:6px;display:block">品種（複数選択可）</label>
+          <div id="itemMultiSelect"></div>
+        </div>
 
         <!-- 3行目: 表示モード・読み込みボタン -->
         <div class="history-filter-row">
@@ -320,7 +330,7 @@
                 通常表示
               </button>
               <button class="mode-btn" id="btnModeCheapest" style="flex:1">
-                ★ カテゴリ別最安値
+                ★ 品種別最安値
               </button>
             </div>
           </div>
