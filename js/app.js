@@ -776,7 +776,7 @@ document.head.appendChild(_shakeStyle);
 // ===========================
 const History = {
   filterOptions: { addresses: [], addressMap: {}, allStores: [] },
-  currentMode:   'normal', // 'normal' | 'cheapest'
+  currentMode:   'normal',
   allData:       [],
 
   init() {
@@ -801,7 +801,6 @@ const History = {
         addressSelect.appendChild(opt);
       });
 
-      // 日付一覧を取得
       await this._loadDates();
       this._updateStoreCheckboxes('');
     } catch(e) {
@@ -837,7 +836,6 @@ const History = {
       ? (this.filterOptions.addressMap?.[address] || [])
       : (this.filterOptions.allStores || []);
 
-    // 全選択チェックボックスを保持
     box.innerHTML = `
       <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
         <input type="checkbox" id="checkAllStores" style="accent-color:#b4f082">
@@ -852,7 +850,6 @@ const History = {
       box.appendChild(label);
     });
 
-    // 全選択ボタンのイベント
     const checkAll = document.getElementById('checkAllStores');
     if (checkAll) {
       checkAll.addEventListener('change', () => {
@@ -861,21 +858,80 @@ const History = {
     }
   },
 
+  _updateItemCheckboxes(items) {
+    const box = document.getElementById('historyItemCheckboxes');
+    if (!box) return;
+
+    // 品種一覧を取得（重複除去・ソート）
+    const itemNames = [...new Set(items.map(i => i.itemName || '').filter(Boolean))].sort();
+
+    if (itemNames.length === 0) {
+      box.style.display = 'none';
+      return;
+    }
+
+    box.style.display = 'block';
+    box.innerHTML = `
+      <label class="field-label" style="margin-bottom:6px;display:block">品種（複数選択可）</label>
+      <div id="itemCheckboxList" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+          <input type="checkbox" id="checkAllItems" style="accent-color:#b4f082">
+          <span style="color:#b4f082;font-weight:600">全て選択</span>
+        </label>
+        ${itemNames.map(name => `
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--text);font-size:13px">
+            <input type="checkbox" class="item-checkbox" value="${name}" style="accent-color:#cba6f7"> ${name}
+          </label>
+        `).join('')}
+      </div>
+      <input type="text" id="historyItemKeyword" class="field-input" placeholder="または直接入力で絞り込み..." style="margin-top:4px">
+    `;
+
+    // 全選択
+    const checkAll = document.getElementById('checkAllItems');
+    if (checkAll) {
+      checkAll.addEventListener('change', () => {
+        document.querySelectorAll('.item-checkbox').forEach(cb => cb.checked = checkAll.checked);
+        this._renderResults();
+      });
+    }
+
+    // 各チェックボックスの変更でリアルタイム反映
+    document.querySelectorAll('.item-checkbox').forEach(cb => {
+      cb.addEventListener('change', () => this._renderResults());
+    });
+
+    // キーワード入力でリアルタイム反映
+    const keyword = document.getElementById('historyItemKeyword');
+    if (keyword) {
+      keyword.addEventListener('input', () => this._renderResults());
+    }
+  },
+
   _getSelectedStores() {
     return Array.from(document.querySelectorAll('.store-checkbox:checked')).map(cb => cb.value);
   },
 
+  _getSelectedItems() {
+    return Array.from(document.querySelectorAll('.item-checkbox:checked')).map(cb => cb.value);
+  },
+
   _bindEvents() {
-    const addressSelect    = document.getElementById('historyAddressSelect');
-    const loadBtn          = document.getElementById('btnLoadHistory');
-    const btnNormal        = document.getElementById('btnModeNormal');
-    const btnCheapest      = document.getElementById('btnModeCheapest');
+    const addressSelect = document.getElementById('historyAddressSelect');
+    const loadBtn       = document.getElementById('btnLoadHistory');
+    const btnNormal     = document.getElementById('btnModeNormal');
+    const btnCheapest   = document.getElementById('btnModeCheapest');
+    const catFilter     = document.getElementById('historyCategoryFilter');
 
     if (addressSelect) {
       addressSelect.addEventListener('change', () => {
         this._updateStoreCheckboxes(addressSelect.value);
         this._loadDates();
       });
+    }
+
+    if (catFilter) {
+      catFilter.addEventListener('change', () => this._renderResults());
     }
 
     if (btnNormal) {
@@ -902,9 +958,8 @@ const History = {
   },
 
   async _loadData() {
-    const date          = document.getElementById('historyDateSelect')?.value || '';
-    const selectedStores = this._getSelectedStores();
-    const gasUrl        = Config.get('gasUrl');
+    const date   = document.getElementById('historyDateSelect')?.value || '';
+    const gasUrl = Config.get('gasUrl');
 
     UI.toast('データを読み込み中...', 'info', 2000);
 
@@ -915,6 +970,8 @@ const History = {
       const data = await res.json();
       this.allData = data.items || [];
 
+      // 品種チェックボックスを更新
+      this._updateItemCheckboxes(this.allData);
       this._renderResults();
 
       const section = document.getElementById('historyResultsSection');
@@ -928,13 +985,15 @@ const History = {
   },
 
   _getFilteredData() {
-    const selectedStores  = this._getSelectedStores();
-    const categoryFilter  = document.getElementById('historyCategoryFilter')?.value || '';
-    const itemKeyword     = document.getElementById('historyItemKeyword')?.value.trim() || '';
+    const selectedStores = this._getSelectedStores();
+    const selectedItems  = this._getSelectedItems();
+    const categoryFilter = document.getElementById('historyCategoryFilter')?.value || '';
+    const itemKeyword    = document.getElementById('historyItemKeyword')?.value.trim() || '';
 
     return this.allData.filter(item => {
       if (selectedStores.length > 0 && !selectedStores.includes(item.storeName)) return false;
       if (categoryFilter && item.category !== categoryFilter) return false;
+      if (selectedItems.length > 0 && !selectedItems.includes(item.itemName)) return false;
       if (itemKeyword && !item.itemName?.includes(itemKeyword) && !item.name?.includes(itemKeyword)) return false;
       return true;
     });
@@ -985,15 +1044,13 @@ const History = {
     const thead = document.getElementById('historyTableHead');
     if (!tbody || !thead) return;
 
-    // カテゴリ→品目→スーパー別に集計
     const categoryMap = {};
     items.forEach(item => {
-      const cat  = item.category || 'その他';
-      const name = item.itemName || item.name || '';
+      const cat   = item.category || 'その他';
+      const name  = item.itemName || item.name || '';
       const store = item.storeName || '';
       if (!categoryMap[cat]) categoryMap[cat] = {};
       if (!categoryMap[cat][name]) categoryMap[cat][name] = {};
-      // 同じスーパーで複数ある場合は最安値を保持
       if (!categoryMap[cat][name][store] || item.price < categoryMap[cat][name][store].price) {
         categoryMap[cat][name][store] = { price: item.price, detail: item.detail || '' };
       }
@@ -1012,17 +1069,16 @@ const History = {
     }
 
     Object.keys(categoryMap).sort().forEach(cat => {
-      const items = categoryMap[cat];
-      Object.keys(items).sort().forEach(itemName => {
-        const storeData  = items[itemName];
+      const catItems = categoryMap[cat];
+      Object.keys(catItems).sort().forEach(itemName => {
+        const storeData  = catItems[itemName];
         const storeNames = Object.keys(storeData);
-        // 最安値のスーパーを特定
         const cheapest   = storeNames.reduce((a, b) => storeData[a].price <= storeData[b].price ? a : b);
 
         storeNames.forEach((store, idx) => {
-          const tr        = document.createElement('tr');
-          const isCheap   = store === cheapest;
-          const isMulti   = storeNames.length > 1;
+          const tr      = document.createElement('tr');
+          const isCheap = store === cheapest;
+          const isMulti = storeNames.length > 1;
           tr.style.cssText = isCheap && isMulti ? 'background:rgba(166,227,161,0.08)' : '';
           tr.innerHTML = `
             <td>${idx === 0 ? `<span class="cat-chip">${cat}</span>` : ''}</td>
