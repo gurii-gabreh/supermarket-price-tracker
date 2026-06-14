@@ -262,7 +262,8 @@
 
     <section class="stores-section" style="display:block">
       <div class="history-filter-card">
-        <div class="history-filter-row">
+        <!-- 1行目: 住所・日付 -->
+        <div class="history-filter-row" style="margin-bottom:12px">
           <!-- 住所フィルター -->
           <div class="field-group" style="margin:0;flex:1">
             <label class="field-label">住所</label>
@@ -270,18 +271,60 @@
               <option value="">読み込み中...</option>
             </select>
           </div>
-          <!-- スーパー名フィルター -->
-          <div class="field-group" style="margin:0;flex:1;position:relative">
-            <label class="field-label">スーパー名</label>
-            <input type="text" id="historyStoreKeyword" class="field-input" placeholder="キーワードで絞り込み...">
-            <div id="historyStoreSuggestions" class="store-suggestions"></div>
-          </div>
           <!-- 日付フィルター -->
           <div class="field-group" style="margin:0;flex:1">
             <label class="field-label">収集日</label>
             <select id="historyDateSelect" class="field-input">
-              <option value="">スーパーを選択してください</option>
+              <option value="">日付を選択してください</option>
             </select>
+          </div>
+          <!-- カテゴリフィルター -->
+          <div class="field-group" style="margin:0;flex:1">
+            <label class="field-label">カテゴリ</label>
+            <select id="historyCategoryFilter" class="field-input">
+              <option value="">すべて</option>
+              <option>野菜・果物</option>
+              <option>肉・鶏</option>
+              <option>魚介類</option>
+              <option>乳製品・卵</option>
+              <option>パン・米</option>
+              <option>飲料</option>
+              <option>冷凍食品</option>
+              <option>調味料</option>
+              <option>生活雑貨</option>
+              <option>その他</option>
+            </select>
+          </div>
+          <!-- 品種フィルター -->
+          <div class="field-group" style="margin:0;flex:1">
+            <label class="field-label">品種</label>
+            <input type="text" id="historyItemKeyword" class="field-input" placeholder="例: キャベツ">
+          </div>
+        </div>
+
+        <!-- 2行目: スーパー複数選択 -->
+        <div class="field-group" style="margin:0 0 12px 0">
+          <label class="field-label">スーパー（複数選択可）</label>
+          <div id="historyStoreCheckboxes" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--text);font-size:13px">
+              <input type="checkbox" id="checkAllStores" style="accent-color:#b4f082">
+              <span style="color:#b4f082;font-weight:600">全て選択</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 3行目: 表示モード・読み込みボタン -->
+        <div class="history-filter-row">
+          <div class="field-group" style="margin:0;flex:1">
+            <label class="field-label">表示モード</label>
+            <div style="display:flex;gap:8px;margin-top:6px">
+              <button class="mode-btn active" id="btnModeNormal" style="flex:1">
+                通常表示
+              </button>
+              <button class="mode-btn" id="btnModeCheapest" style="flex:1">
+                ★ カテゴリ別最安値
+              </button>
+            </div>
           </div>
           <button class="primary-btn" id="btnLoadHistory" style="align-self:flex-end;white-space:nowrap">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/></svg>
