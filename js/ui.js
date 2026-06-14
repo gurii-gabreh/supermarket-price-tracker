@@ -30,10 +30,12 @@ const UI = {
     const sheetEl = document.getElementById('sheetUrl');
     if (sheetEl && cfg.sheetUrl) sheetEl.value = cfg.sheetUrl;
 
-    const overlay = document.getElementById('settingsOverlay');
-    document.getElementById('btnToggleSetup').addEventListener('click', () => { overlay.style.display = 'flex'; });
-    document.getElementById('drawerClose').addEventListener('click', () => { overlay.style.display = 'none'; });
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
+    const overlay   = document.getElementById('settingsOverlay');
+    const toggleBtn = document.getElementById('btnToggleSetup');
+    const closeBtn  = document.getElementById('drawerClose');
+    if (toggleBtn) toggleBtn.addEventListener('click', () => { if (overlay) overlay.style.display = 'flex'; });
+    if (closeBtn)  closeBtn.addEventListener('click',  () => { if (overlay) overlay.style.display = 'none'; });
+    if (overlay)   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
   },
 
   // ── スーパーカード ──
