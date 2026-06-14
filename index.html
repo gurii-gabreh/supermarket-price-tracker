@@ -324,10 +324,6 @@
               <option>その他</option>
             </select>
           </div>
-          <div class="field-group" style="margin:0;flex:1">
-            <label class="field-label">品種</label>
-            <input type="text" id="historyItemKeyword" class="field-input" placeholder="例: キャベツ">
-          </div>
         </div>
 
         <!-- 2行目: スーパー複数選択 -->
@@ -340,6 +336,9 @@
             </label>
           </div>
         </div>
+
+        <!-- 品種チェックボックス（読み込み後に表示） -->
+        <div id="historyItemCheckboxes" style="display:none;margin-bottom:12px"></div>
 
         <!-- 3行目: 表示モード・読み込みボタン -->
         <div class="history-filter-row">
