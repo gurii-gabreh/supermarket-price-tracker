@@ -65,6 +65,8 @@ const App = {
   },
 
   _updateSheetLink() {
+    // prices.htmlでは価格履歴ボタンを非表示のまま維持
+    if (document.body.dataset.page === 'prices') return;
     const sheetUrl = Config.get('sheetUrl');
     const btn      = document.getElementById('btnOpenSheet');
     if (!btn) return;
