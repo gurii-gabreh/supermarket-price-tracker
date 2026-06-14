@@ -784,6 +784,83 @@ const History = {
     this._bindEvents();
   },
 
+  // プルダウン複数選択を作成
+  _createMultiSelect(wrapperId, items, placeholder, accentColor = '#89b4fa') {
+    const wrap = document.getElementById(wrapperId);
+    if (!wrap) return;
+
+    wrap.innerHTML = `
+      <div class="multi-select-wrap" id="${wrapperId}_wrap">
+        <button class="multi-select-btn" id="${wrapperId}_btn" type="button">
+          <span id="${wrapperId}_label">${placeholder}</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="multi-select-dropdown" id="${wrapperId}_dropdown">
+          <label class="multi-select-item all-item">
+            <input type="checkbox" id="${wrapperId}_all" style="accent-color:#b4f082">
+            全て選択
+          </label>
+          ${items.map(item => `
+            <label class="multi-select-item">
+              <input type="checkbox" class="${wrapperId}_item" value="${item}" style="accent-color:${accentColor}">
+              ${item}
+            </label>
+          `).join('')}
+        </div>
+      </div>
+    `;
+
+    // ボタンクリックでドロップダウン開閉
+    const btn      = document.getElementById(`${wrapperId}_btn`);
+    const dropdown = document.getElementById(`${wrapperId}_dropdown`);
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dropdown.classList.toggle('open');
+    });
+
+    // 外側クリックで閉じる
+    document.addEventListener('click', () => dropdown.classList.remove('open'));
+
+    // 全選択
+    const allCb = document.getElementById(`${wrapperId}_all`);
+    if (allCb) {
+      allCb.addEventListener('change', () => {
+        document.querySelectorAll(`.${wrapperId}_item`).forEach(cb => cb.checked = allCb.checked);
+        this._updateMultiSelectLabel(wrapperId, placeholder);
+        this._renderResults();
+      });
+    }
+
+    // 各アイテム
+    document.querySelectorAll(`.${wrapperId}_item`).forEach(cb => {
+      cb.addEventListener('change', () => {
+        const all     = document.querySelectorAll(`.${wrapperId}_item`);
+        const checked = document.querySelectorAll(`.${wrapperId}_item:checked`);
+        if (allCb) allCb.checked = all.length === checked.length;
+        this._updateMultiSelectLabel(wrapperId, placeholder);
+        this._renderResults();
+      });
+    });
+  },
+
+  _updateMultiSelectLabel(wrapperId, placeholder) {
+    const checked = document.querySelectorAll(`.${wrapperId}_item:checked`);
+    const label   = document.getElementById(`${wrapperId}_label`);
+    if (!label) return;
+    if (checked.length === 0) {
+      label.textContent = placeholder;
+    } else {
+      const all = document.querySelectorAll(`.${wrapperId}_item`);
+      label.textContent = all.length === checked.length
+        ? '全て選択中'
+        : `${checked.length}件選択中`;
+    }
+  },
+
+  _getMultiSelected(wrapperId) {
+    return Array.from(document.querySelectorAll(`.${wrapperId}_item:checked`)).map(cb => cb.value);
+  },
+
   async _loadFilterOptions() {
     const addressSelect = document.getElementById('historyAddressSelect');
     if (!addressSelect) return;
@@ -802,22 +879,20 @@ const History = {
       });
 
       await this._loadDates();
-      this._updateStoreCheckboxes('');
+      this._createMultiSelect('storeMultiSelect', data.allStores || [], 'スーパーを選択...');
     } catch(e) {
       addressSelect.innerHTML = '<option value="">取得失敗</option>';
     }
   },
 
-  async _loadDates(storeName) {
+  async _loadDates() {
     const dateSelect = document.getElementById('historyDateSelect');
     if (!dateSelect) return;
     dateSelect.innerHTML = '<option value="">読み込み中...</option>';
     try {
       const gasUrl = Config.get('gasUrl');
-      const params = new URLSearchParams({ action: 'getHistoryDates' });
-      if (storeName) params.append('storeName', storeName);
-      const res  = await fetch(`${gasUrl}?${params}`);
-      const data = await res.json();
+      const res    = await fetch(`${gasUrl}?${new URLSearchParams({ action: 'getHistoryDates' })}`);
+      const data   = await res.json();
       dateSelect.innerHTML = '<option value="">すべての日付</option>';
       (data.dates || []).forEach(d => {
         const opt = document.createElement('option');
@@ -829,91 +904,18 @@ const History = {
     }
   },
 
-  _updateStoreCheckboxes(address) {
-    const box = document.getElementById('historyStoreCheckboxes');
-    if (!box) return;
-    const stores = address
-      ? (this.filterOptions.addressMap?.[address] || [])
-      : (this.filterOptions.allStores || []);
-
-    box.innerHTML = `
-      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
-        <input type="checkbox" id="checkAllStores" style="accent-color:#b4f082">
-        <span style="color:#b4f082;font-weight:600">全て選択</span>
-      </label>
-    `;
-
-    stores.forEach(store => {
-      const label = document.createElement('label');
-      label.style.cssText = 'display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--text);font-size:13px';
-      label.innerHTML = `<input type="checkbox" class="store-checkbox" value="${store}" style="accent-color:#89b4fa"> ${store}`;
-      box.appendChild(label);
-    });
-
-    const checkAll = document.getElementById('checkAllStores');
-    if (checkAll) {
-      checkAll.addEventListener('change', () => {
-        document.querySelectorAll('.store-checkbox').forEach(cb => cb.checked = checkAll.checked);
-      });
-    }
-  },
-
-  _updateItemCheckboxes(items) {
-    const box = document.getElementById('historyItemCheckboxes');
+  _updateItemMultiSelect(items) {
+    const box = document.getElementById('itemMultiSelectWrap');
     if (!box) return;
 
-    // 品種一覧を取得（重複除去・ソート）
     const itemNames = [...new Set(items.map(i => i.itemName || '').filter(Boolean))].sort();
-
     if (itemNames.length === 0) {
       box.style.display = 'none';
       return;
     }
 
     box.style.display = 'block';
-    box.innerHTML = `
-      <label class="field-label" style="margin-bottom:6px;display:block">品種（複数選択可）</label>
-      <div id="itemCheckboxList" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
-          <input type="checkbox" id="checkAllItems" style="accent-color:#b4f082">
-          <span style="color:#b4f082;font-weight:600">全て選択</span>
-        </label>
-        ${itemNames.map(name => `
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--text);font-size:13px">
-            <input type="checkbox" class="item-checkbox" value="${name}" style="accent-color:#cba6f7"> ${name}
-          </label>
-        `).join('')}
-      </div>
-      <input type="text" id="historyItemKeyword" class="field-input" placeholder="または直接入力で絞り込み..." style="margin-top:4px">
-    `;
-
-    // 全選択
-    const checkAll = document.getElementById('checkAllItems');
-    if (checkAll) {
-      checkAll.addEventListener('change', () => {
-        document.querySelectorAll('.item-checkbox').forEach(cb => cb.checked = checkAll.checked);
-        this._renderResults();
-      });
-    }
-
-    // 各チェックボックスの変更でリアルタイム反映
-    document.querySelectorAll('.item-checkbox').forEach(cb => {
-      cb.addEventListener('change', () => this._renderResults());
-    });
-
-    // キーワード入力でリアルタイム反映
-    const keyword = document.getElementById('historyItemKeyword');
-    if (keyword) {
-      keyword.addEventListener('input', () => this._renderResults());
-    }
-  },
-
-  _getSelectedStores() {
-    return Array.from(document.querySelectorAll('.store-checkbox:checked')).map(cb => cb.value);
-  },
-
-  _getSelectedItems() {
-    return Array.from(document.querySelectorAll('.item-checkbox:checked')).map(cb => cb.value);
+    this._createMultiSelect('itemMultiSelect', itemNames, '品種を選択...', '#cba6f7');
   },
 
   _bindEvents() {
@@ -925,7 +927,11 @@ const History = {
 
     if (addressSelect) {
       addressSelect.addEventListener('change', () => {
-        this._updateStoreCheckboxes(addressSelect.value);
+        const addr   = addressSelect.value;
+        const stores = addr
+          ? (this.filterOptions.addressMap?.[addr] || [])
+          : (this.filterOptions.allStores || []);
+        this._createMultiSelect('storeMultiSelect', stores, 'スーパーを選択...');
         this._loadDates();
       });
     }
@@ -970,8 +976,7 @@ const History = {
       const data = await res.json();
       this.allData = data.items || [];
 
-      // 品種チェックボックスを更新
-      this._updateItemCheckboxes(this.allData);
+      this._updateItemMultiSelect(this.allData);
       this._renderResults();
 
       const section = document.getElementById('historyResultsSection');
@@ -985,16 +990,14 @@ const History = {
   },
 
   _getFilteredData() {
-    const selectedStores = this._getSelectedStores();
-    const selectedItems  = this._getSelectedItems();
+    const selectedStores = this._getMultiSelected('storeMultiSelect');
+    const selectedItems  = this._getMultiSelected('itemMultiSelect');
     const categoryFilter = document.getElementById('historyCategoryFilter')?.value || '';
-    const itemKeyword    = document.getElementById('historyItemKeyword')?.value.trim() || '';
 
     return this.allData.filter(item => {
       if (selectedStores.length > 0 && !selectedStores.includes(item.storeName)) return false;
       if (categoryFilter && item.category !== categoryFilter) return false;
       if (selectedItems.length > 0 && !selectedItems.includes(item.itemName)) return false;
-      if (itemKeyword && !item.itemName?.includes(itemKeyword) && !item.name?.includes(itemKeyword)) return false;
       return true;
     });
   },
@@ -1044,54 +1047,54 @@ const History = {
     const thead = document.getElementById('historyTableHead');
     if (!tbody || !thead) return;
 
-    const categoryMap = {};
+    // 品目別・スーパー別に集計
+    const itemMap = {};
     items.forEach(item => {
-      const cat   = item.category || 'その他';
       const name  = item.itemName || item.name || '';
       const store = item.storeName || '';
-      if (!categoryMap[cat]) categoryMap[cat] = {};
-      if (!categoryMap[cat][name]) categoryMap[cat][name] = {};
-      if (!categoryMap[cat][name][store] || item.price < categoryMap[cat][name][store].price) {
-        categoryMap[cat][name][store] = { price: item.price, detail: item.detail || '' };
+      if (!name) return;
+      if (!itemMap[name]) itemMap[name] = {};
+      if (!itemMap[name][store] || item.price < itemMap[name][store].price) {
+        itemMap[name][store] = {
+          price:    item.price,
+          detail:   item.detail || '',
+          category: item.category || '',
+        };
       }
     });
 
     thead.innerHTML = `<tr>
-      <th>カテゴリ</th><th>品目</th><th>スーパー</th>
-      <th>価格</th><th>詳細</th><th>備考</th>
+      <th>品目</th><th>スーパー</th><th>価格</th><th>詳細</th><th>カテゴリ</th><th>備考</th>
     </tr>`;
 
     tbody.innerHTML = '';
 
-    if (Object.keys(categoryMap).length === 0) {
+    if (Object.keys(itemMap).length === 0) {
       tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text3)">データがありません</td></tr>';
       return;
     }
 
-    Object.keys(categoryMap).sort().forEach(cat => {
-      const catItems = categoryMap[cat];
-      Object.keys(catItems).sort().forEach(itemName => {
-        const storeData  = catItems[itemName];
-        const storeNames = Object.keys(storeData);
-        const cheapest   = storeNames.reduce((a, b) => storeData[a].price <= storeData[b].price ? a : b);
+    Object.keys(itemMap).sort().forEach(itemName => {
+      const storeData  = itemMap[itemName];
+      const storeNames = Object.keys(storeData);
+      const cheapest   = storeNames.reduce((a, b) => storeData[a].price <= storeData[b].price ? a : b);
+      const isMulti    = storeNames.length > 1;
 
-        storeNames.forEach((store, idx) => {
-          const tr      = document.createElement('tr');
-          const isCheap = store === cheapest;
-          const isMulti = storeNames.length > 1;
-          tr.style.cssText = isCheap && isMulti ? 'background:rgba(166,227,161,0.08)' : '';
-          tr.innerHTML = `
-            <td>${idx === 0 ? `<span class="cat-chip">${cat}</span>` : ''}</td>
-            <td>${idx === 0 ? itemName : ''}</td>
-            <td>${store}</td>
-            <td class="price-cell" style="${isCheap && isMulti ? 'color:#a6e3a1;font-weight:700' : ''}">
-              ¥${Number(storeData[store].price).toLocaleString()}
-            </td>
-            <td style="font-size:12px;color:var(--text3)">${storeData[store].detail}</td>
-            <td>${isCheap && isMulti ? '<span class="sale-badge" style="background:rgba(166,227,161,0.2);color:#a6e3a1">★最安値</span>' : ''}</td>
-          `;
-          tbody.appendChild(tr);
-        });
+      storeNames.sort((a, b) => storeData[a].price - storeData[b].price).forEach((store, idx) => {
+        const tr      = document.createElement('tr');
+        const isCheap = store === cheapest;
+        tr.style.cssText = isCheap && isMulti ? 'background:rgba(166,227,161,0.08)' : '';
+        tr.innerHTML = `
+          <td style="font-weight:${idx === 0 ? '600' : '400'}">${idx === 0 ? itemName : ''}</td>
+          <td>${store}</td>
+          <td class="price-cell" style="${isCheap && isMulti ? 'color:#a6e3a1;font-weight:700' : ''}">
+            ¥${Number(storeData[store].price).toLocaleString()}
+          </td>
+          <td style="font-size:12px;color:var(--text3)">${storeData[store].detail}</td>
+          <td><span class="cat-chip" style="font-size:11px">${storeData[store].category}</span></td>
+          <td>${isCheap && isMulti ? '<span class="sale-badge" style="background:rgba(166,227,161,0.2);color:#a6e3a1">★最安値</span>' : ''}</td>
+        `;
+        tbody.appendChild(tr);
       });
     });
   },
