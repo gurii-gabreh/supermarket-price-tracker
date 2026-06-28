@@ -177,10 +177,8 @@ const App = {
           UI.renderStores(stores, false);
           UI.toast(`${stores.length}件のスーパーが見つかりました`, 'success');
         } else {
-          await new Promise(r => setTimeout(r, 600));
-          stores = this._demoStores(address);
-          UI.renderStores(stores, true);
-          UI.toast('GAS URLを設定すると実際のお店が検索できます', 'info', 6000);
+          UI.toast('設定画面でGAS URLを入力してください', 'error');
+          return;
         }
       }
 
@@ -665,7 +663,7 @@ const Settings = {
 
     const doSearch = async () => {
       const address = input.value.trim();
-      if (!address) { UI.toast('住所を入力してください', 'error'); return; }
+      if (!address) { UI.toast('キーワードを入力してください', 'error'); return; }
 
       searchBtn.disabled = true;
       searchBtn.textContent = '検索中...';
@@ -687,7 +685,7 @@ const Settings = {
 
         const stores = data.stores || [];
         if (stores.length === 0) {
-          UI.toast('スーパーが見つかりませんでした', 'info');
+          UI.toast(data.error || '該当するスーパーが見つかりませんでした', 'info');
           return;
         }
 
