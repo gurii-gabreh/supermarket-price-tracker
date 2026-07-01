@@ -336,7 +336,6 @@ const UI = {
       <th>品目</th>
       ${stores.map(s => `<th style="text-align:right">
         ${this._e(s.name)}
-        ${s.tokubaiUrl ? `<br><a href="${this._e(s.tokubaiUrl)}" target="_blank" style="font-size:10px;color:var(--lime);font-weight:400">チラシを見る↗</a>` : ''}
       </th>`).join('')}
     </tr>`;
     tbody.innerHTML = '';
@@ -351,8 +350,6 @@ const UI = {
         // 同じ品目の複数商品を表示
         const productHtml = products.map(p => {
           const isMin  = item.minStoreId === store.id && p.price === item.minPrice;
-          const orig   = p.originalPrice
-            ? `<span style="text-decoration:line-through;font-size:11px;color:var(--text3)">¥${p.originalPrice.toLocaleString()}</span> ` : '';
           const sale   = p.isSale ? '<span class="sale-badge">SALE</span>' : '';
           const cls    = isMin ? 'best' : p.isSale ? 'sale' : 'normal';
           const valid  = p.validDate && p.validDate !== '期間中'
@@ -506,8 +503,6 @@ const UI = {
     }
 
     storeItems.forEach(item => {
-      const orig = item.originalPrice
-        ? `<span style="text-decoration:line-through;font-size:11px;color:var(--text3)">¥${item.originalPrice.toLocaleString()}</span> ` : '';
       const sale = item.isSale ? '<span class="sale-badge">SALE</span>' : '';
       const valid = item.validDate && item.validDate !== '期間中'
         ? `<span class="valid-date-badge">${this._e(item.validDate)}</span>` : '';
@@ -528,7 +523,7 @@ const UI = {
         </td>
         <td style="font-size:12px;color:var(--text2)">${this._e(item.detail)}${valid}</td>
         <td class="price-cell">
-          ${orig}<span class="price-tag ${item.isMinOverall ? 'best' : item.isSale ? 'sale' : 'normal'}">¥${item.price.toLocaleString()}</span>${sale}
+          <span class="price-tag ${item.isMinOverall ? 'best' : item.isSale ? 'sale' : 'normal'}">¥${item.price.toLocaleString()}</span>${sale}
         </td>
         <td class="price-cell">
           ${item.otherMin !== null ? `<span class="price-tag normal">¥${item.otherMin.toLocaleString()}</span>` : '<span class="price-none">—</span>'}

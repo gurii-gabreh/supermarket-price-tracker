@@ -815,11 +815,24 @@ const History = {
     const dropdown = document.getElementById(`${wrapperId}_dropdown`);
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      // 他のドロップダウンを閉じる
+      document.querySelectorAll('.multi-select-dropdown.open').forEach(d => {
+        if (d !== dropdown) d.classList.remove('open');
+      });
       dropdown.classList.toggle('open');
     });
 
-    // 外側クリックで閉じる
-    document.addEventListener('click', () => dropdown.classList.remove('open'));
+    // 欄外クリックで閉じる・反映
+    document.addEventListener('click', (e) => {
+      if (!dropdown.contains(e.target) && e.target !== btn) {
+        dropdown.classList.remove('open');
+      }
+    });
+
+    // ドロップダウン内クリックは閉じない
+    dropdown.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
 
     // 全選択
     const allCb = document.getElementById(`${wrapperId}_all`);
@@ -923,7 +936,6 @@ const History = {
     const loadBtn       = document.getElementById('btnLoadHistory');
     const btnNormal     = document.getElementById('btnModeNormal');
     const btnCheapest   = document.getElementById('btnModeCheapest');
-    const catFilter     = document.getElementById('historyCategoryFilter');
 
     if (addressSelect) {
       addressSelect.addEventListener('change', () => {
@@ -936,8 +948,9 @@ const History = {
       });
     }
 
-    if (catFilter) {
-      catFilter.addEventListener('change', () => this._renderResults());
+    const typeFilter = document.getElementById('historyTypeFilter');
+    if (typeFilter) {
+      typeFilter.addEventListener('change', () => this._renderResults());
     }
 
     if (btnNormal) {
@@ -990,14 +1003,19 @@ const History = {
   },
 
   _getFilteredData() {
+    const FOOD_CATEGORIES  = ['野菜・果物', '肉・鶏', '魚介類', '乳製品・卵', 'パン・米', '飲料', '冷凍食品', '調味料'];
+    const DAILY_CATEGORIES = ['生活雑貨'];
+
     const selectedStores = this._getMultiSelected('storeMultiSelect');
     const selectedItems  = this._getMultiSelected('itemMultiSelect');
-    const categoryFilter = document.getElementById('historyCategoryFilter')?.value || '';
+    const typeFilter     = document.getElementById('historyTypeFilter')?.value || '';
 
     return this.allData.filter(item => {
       if (selectedStores.length > 0 && !selectedStores.includes(item.storeName)) return false;
-      if (categoryFilter && item.category !== categoryFilter) return false;
       if (selectedItems.length > 0 && !selectedItems.includes(item.itemName)) return false;
+      if (typeFilter === 'food'  && !FOOD_CATEGORIES.includes(item.category))  return false;
+      if (typeFilter === 'daily' && !DAILY_CATEGORIES.includes(item.category)) return false;
+      if (typeFilter === 'other' && (FOOD_CATEGORIES.includes(item.category) || DAILY_CATEGORIES.includes(item.category))) return false;
       return true;
     });
   },
@@ -1018,7 +1036,7 @@ const History = {
 
     thead.innerHTML = `<tr>
       <th>品目</th><th>商品名</th><th>カテゴリ</th>
-      <th>スーパー</th><th>価格</th><th>元値</th><th>特売</th>
+      <th>スーパー</th><th>価格</th><th>特売</th>
     </tr>`;
 
     tbody.innerHTML = '';
@@ -1035,7 +1053,6 @@ const History = {
         <td><span class="cat-chip">${item.category || ''}</span></td>
         <td>${item.storeName || ''}</td>
         <td class="price-cell">¥${Number(item.price).toLocaleString()}</td>
-        <td>${item.originalPrice ? '¥' + Number(item.originalPrice).toLocaleString() : '-'}</td>
         <td>${item.isSale ? '<span class="sale-badge">特売</span>' : ''}</td>
       `;
       tbody.appendChild(tr);
