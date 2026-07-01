@@ -256,30 +256,28 @@
         <div style="background:rgba(137,180,250,0.08);border:1px solid rgba(137,180,250,0.2);border-radius:10px;padding:14px 16px;margin-bottom:16px">
           <p style="color:#89b4fa;font-size:13px;font-weight:700;margin-bottom:8px">📖 使い方</p>
           <ol style="color:#a6adc8;font-size:12px;line-height:1.8;margin:0;padding-left:18px">
-            <li>住所・収集日・カテゴリを選択してください（任意）</li>
+            <li>住所・収集日・食料品/日用雑貨を選択してください（任意）</li>
             <li>比較したいスーパーにチェックを入れてください</li>
             <li>「読み込む」ボタンを押してデータを取得してください</li>
             <li>読み込み後、品種を複数選択して絞り込みができます</li>
-            <li>表示モードで「★ カテゴリ別最安値」を選ぶとスーパー間の最安値を比較できます</li>
+            <li>表示モードで「★ 品種別最安値」を選ぶとスーパー間の最安値を比較できます</li>
           </ol>
         </div>
-        <!-- 1行目: 住所・日付 -->
+
+        <!-- 1行目: 住所・日付・食料品日用品 -->
         <div class="history-filter-row" style="margin-bottom:12px">
-          <!-- 住所フィルター -->
           <div class="field-group" style="margin:0;flex:1">
             <label class="field-label">住所</label>
             <select id="historyAddressSelect" class="field-input">
               <option value="">読み込み中...</option>
             </select>
           </div>
-          <!-- 日付フィルター -->
           <div class="field-group" style="margin:0;flex:1">
             <label class="field-label">収集日</label>
             <select id="historyDateSelect" class="field-input">
               <option value="">日付を選択してください</option>
             </select>
           </div>
-          <!-- カテゴリフィルター -->
           <div class="field-group" style="margin:0;flex:1">
             <label class="field-label">食料品 / 日用雑貨</label>
             <select id="historyTypeFilter" class="field-input">
@@ -289,34 +287,18 @@
               <option value="other">その他</option>
             </select>
           </div>
+        </div>
+
+        <!-- 2行目: スーパー・品目を1行に -->
+        <div class="history-filter-row" style="margin-bottom:12px">
           <div class="field-group" style="margin:0;flex:1">
-            <label class="field-label">カテゴリ</label>
-            <select id="historyCategoryFilter" class="field-input">
-              <option value="">すべて</option>
-              <option>野菜・果物</option>
-              <option>肉・鶏</option>
-              <option>魚介類</option>
-              <option>乳製品・卵</option>
-              <option>パン・米</option>
-              <option>飲料</option>
-              <option>冷凍食品</option>
-              <option>調味料</option>
-              <option>生活雑貨</option>
-              <option>その他</option>
-            </select>
+            <label class="field-label">スーパー（複数選択可）</label>
+            <div id="storeMultiSelect" style="margin-top:6px"></div>
           </div>
-        </div>
-
-        <!-- 2行目: スーパー複数選択（プルダウン） -->
-        <div class="field-group" style="margin:0 0 12px 0">
-          <label class="field-label">スーパー（複数選択可）</label>
-          <div id="storeMultiSelect" style="margin-top:6px"></div>
-        </div>
-
-        <!-- 品種複数選択（読み込み後に表示） -->
-        <div id="itemMultiSelectWrap" style="display:none;margin-bottom:12px">
-          <label class="field-label" style="margin-bottom:6px;display:block">品種（複数選択可）</label>
-          <div id="itemMultiSelect"></div>
+          <div id="itemMultiSelectWrap" style="flex:1;display:none">
+            <label class="field-label" style="margin-bottom:6px;display:block">品種（複数選択可）</label>
+            <div id="itemMultiSelect"></div>
+          </div>
         </div>
 
         <!-- 3行目: 表示モード・読み込みボタン -->

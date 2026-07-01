@@ -253,9 +253,12 @@
           <h2 class="section-title">価格比較結果</h2>
           <span class="time-chip" id="resultDate"></span>
         </div>
+        <p style="color:#a6adc8;font-size:12px;margin:6px 0 0 0">
+          ✅ 収集データは1枚ごとに自動でスプレッドシートに保存されます
+        </p>
         <div class="section-actions">
           <button class="ghost-btn" id="btnReCollect">再収集</button>
-          <button class="primary-btn" id="btnExportSheet">
+          <button class="primary-btn" id="btnExportSheet" style="display:none">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             シートに保存
           </button>
@@ -294,7 +297,7 @@
 
     <section class="stores-section" style="display:block">
       <div class="history-filter-card">
-        <!-- 1行目: 住所・日付 -->
+        <!-- 1行目: 住所・日付・食料品日用品 -->
         <div class="history-filter-row" style="margin-bottom:12px">
           <div class="field-group" style="margin:0;flex:1">
             <label class="field-label">住所</label>
@@ -317,34 +320,18 @@
               <option value="other">その他</option>
             </select>
           </div>
+        </div>
+
+        <!-- 2行目: スーパー・品目を1行に -->
+        <div class="history-filter-row" style="margin-bottom:12px">
           <div class="field-group" style="margin:0;flex:1">
-            <label class="field-label">カテゴリ</label>
-            <select id="historyCategoryFilter" class="field-input">
-              <option value="">すべて</option>
-              <option>野菜・果物</option>
-              <option>肉・鶏</option>
-              <option>魚介類</option>
-              <option>乳製品・卵</option>
-              <option>パン・米</option>
-              <option>飲料</option>
-              <option>冷凍食品</option>
-              <option>調味料</option>
-              <option>生活雑貨</option>
-              <option>その他</option>
-            </select>
+            <label class="field-label">スーパー（複数選択可）</label>
+            <div id="storeMultiSelect" style="margin-top:6px"></div>
           </div>
-        </div>
-
-        <!-- 2行目: スーパー複数選択（プルダウン） -->
-        <div class="field-group" style="margin:0 0 12px 0">
-          <label class="field-label">スーパー（複数選択可）</label>
-          <div id="storeMultiSelect" style="margin-top:6px"></div>
-        </div>
-
-        <!-- 品種複数選択（読み込み後に表示） -->
-        <div id="itemMultiSelectWrap" style="display:none;margin-bottom:12px">
-          <label class="field-label" style="margin-bottom:6px;display:block">品種（複数選択可）</label>
-          <div id="itemMultiSelect"></div>
+          <div id="itemMultiSelectWrap" style="flex:1;display:none">
+            <label class="field-label" style="margin-bottom:6px;display:block">品種（複数選択可）</label>
+            <div id="itemMultiSelect"></div>
+          </div>
         </div>
 
         <!-- 3行目: 表示モード・読み込みボタン -->
