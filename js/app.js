@@ -786,6 +786,7 @@ const History = {
 
   // プルダウン複数選択を作成
   _createMultiSelect(wrapperId, items, placeholder, accentColor = '#89b4fa') {
+    const self = this;
     const wrap = document.getElementById(wrapperId);
     if (!wrap) return;
 
@@ -839,8 +840,8 @@ const History = {
     if (allCb) {
       allCb.addEventListener('change', () => {
         document.querySelectorAll(`.${wrapperId}_item`).forEach(cb => cb.checked = allCb.checked);
-        this._updateMultiSelectLabel(wrapperId, placeholder);
-        this._renderResults();
+        self._updateMultiSelectLabel(wrapperId, placeholder);
+        self._renderResults();
       });
     }
 
@@ -850,8 +851,8 @@ const History = {
         const all     = document.querySelectorAll(`.${wrapperId}_item`);
         const checked = document.querySelectorAll(`.${wrapperId}_item:checked`);
         if (allCb) allCb.checked = all.length === checked.length;
-        this._updateMultiSelectLabel(wrapperId, placeholder);
-        this._renderResults();
+        self._updateMultiSelectLabel(wrapperId, placeholder);
+        self._renderResults();
       });
     });
   },
@@ -927,7 +928,8 @@ const History = {
       return;
     }
 
-    box.style.display = 'block';
+    box.style.display = 'flex';
+    box.style.flexDirection = 'column';
     this._createMultiSelect('itemMultiSelect', itemNames, '品種を選択...', '#cba6f7');
   },
 
@@ -1036,7 +1038,7 @@ const History = {
 
     thead.innerHTML = `<tr>
       <th>品目</th><th>商品名</th><th>カテゴリ</th>
-      <th>スーパー</th><th>価格</th><th>特売</th>
+      <th>スーパー</th><th>価格</th>
     </tr>`;
 
     tbody.innerHTML = '';
@@ -1053,7 +1055,6 @@ const History = {
         <td><span class="cat-chip">${item.category || ''}</span></td>
         <td>${item.storeName || ''}</td>
         <td class="price-cell">¥${Number(item.price).toLocaleString()}</td>
-        <td>${item.isSale ? '<span class="sale-badge">特売</span>' : ''}</td>
       `;
       tbody.appendChild(tr);
     });
