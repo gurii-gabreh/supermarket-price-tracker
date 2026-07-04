@@ -3,7 +3,7 @@
 // ===========================
 const Config = {
   // ▼ GAS URLをここに設定してください（Code.gsをデプロイしたURL）
-  GAS_URL: 'https://script.google.com/macros/s/AKfycbzJeSe01j68EmI-rsUNnu6eGBNSpjEMrYs2k4y47puQFXptE9GypgzsFY24sK1OOYRv/exec',
+  GAS_URL: 'https://script.google.com/macros/s/AKfycbwC0OLLteWvciJIcnhig9faC1MZTSePQdcmQr_E2HeGX9hoR4zwO8tZqe8gIvEu_X6f/exec',
 
   STORAGE_KEY: 'chirashi_tracker_config',
 
