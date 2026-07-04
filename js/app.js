@@ -945,8 +945,12 @@ const History = {
         const stores = addr
           ? (this.filterOptions.addressMap?.[addr] || [])
           : (this.filterOptions.allStores || []);
+        // スーパー選択肢を住所に連動して更新
         this._createMultiSelect('storeMultiSelect', stores, 'スーパーを選択...');
         this._loadDates();
+        // 品種選択肢をリセット
+        const itemWrap = document.getElementById('itemMultiSelectWrap');
+        if (itemWrap) itemWrap.style.display = 'none';
         this._renderResults();
       });
     }
@@ -992,7 +996,9 @@ const History = {
       const data = await res.json();
       this.allData = data.items || [];
 
-      this._updateItemMultiSelect(this.allData);
+      // 住所・スーパーで絞ったデータから品種選択肢を生成
+      const filteredForItems = this._getFilteredData();
+      this._updateItemMultiSelect(filteredForItems);
       this._renderResults();
 
       const section = document.getElementById('historyResultsSection');
