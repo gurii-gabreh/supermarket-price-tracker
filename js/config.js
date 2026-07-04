@@ -1,16 +1,13 @@
 // ===========================
 // config.js - 設定管理
 // ===========================
-
 const Config = {
-  // ▼ GAS URLをここに直接設定してください（Code.gsをデプロイしたURL）
-  GAS_URL: 'https://script.google.com/macros/s/AKfycbwC0OLLteWvciJIcnhig9faC1MZTSePQdcmQr_E2HeGX9hoR4zwO8tZqe8gIvEu_X6f/exec',
+  // ▼ GAS URLをここに設定してください（Code.gsをデプロイしたURL）
+  GAS_URL: 'https://script.google.com/macros/s/AKfycbzJeSe01j68EmI-rsUNnu6eGBNSpjEMrYs2k4y47puQFXptE9GypgzsFY24sK1OOYRv/exec',
 
   STORAGE_KEY: 'chirashi_tracker_config',
 
-  defaults: {
-    sheetUrl: '',
-  },
+  defaults: { sheetUrl: '' },
 
   load() {
     try {
@@ -28,8 +25,10 @@ const Config = {
   },
 
   get(key) {
-    // GAS URLは直接埋め込みを優先
-    if (key === 'gasUrl') return this.GAS_URL;
+    if (key === 'gasUrl') {
+      const saved = this.load();
+      return saved.gasUrl || this.GAS_URL;
+    }
     return this.load()[key];
   },
 };
@@ -37,18 +36,14 @@ const Config = {
 // ── デモモード管理 ──
 const DemoMode = {
   _active: false,
-
   isActive() { return this._active; },
-
   toggle() {
     this._active = !this._active;
     this._apply();
     return this._active;
   },
-
   enable()  { this._active = true;  this._apply(); },
   disable() { this._active = false; this._apply(); },
-
   _apply() {
     const btn    = document.getElementById('btnDemoMode');
     const banner = document.getElementById('demoBanner');
