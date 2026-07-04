@@ -947,6 +947,7 @@ const History = {
           : (this.filterOptions.allStores || []);
         this._createMultiSelect('storeMultiSelect', stores, 'スーパーを選択...');
         this._loadDates();
+        this._renderResults();
       });
     }
 
@@ -1008,13 +1009,24 @@ const History = {
     const FOOD_CATEGORIES  = ['野菜・果物', '肉・鶏', '魚介類', '乳製品・卵', 'パン・米', '飲料', '冷凍食品', '調味料'];
     const DAILY_CATEGORIES = ['生活雑貨'];
 
+    const address        = document.getElementById('historyAddressSelect')?.value || '';
     const selectedStores = this._getMultiSelected('storeMultiSelect');
     const selectedItems  = this._getMultiSelected('itemMultiSelect');
     const typeFilter     = document.getElementById('historyTypeFilter')?.value || '';
 
+    // 住所に紐づくスーパー一覧
+    const addressStores = address
+      ? (this.filterOptions.addressMap?.[address] || [])
+      : [];
+
     return this.allData.filter(item => {
+      // 住所フィルター（住所選択時は紐づくスーパーのみ）
+      if (addressStores.length > 0 && !addressStores.includes(item.storeName)) return false;
+      // スーパーフィルター
       if (selectedStores.length > 0 && !selectedStores.includes(item.storeName)) return false;
+      // 品種フィルター
       if (selectedItems.length > 0 && !selectedItems.includes(item.itemName)) return false;
+      // 食料品/日用雑貨フィルター
       if (typeFilter === 'food'  && !FOOD_CATEGORIES.includes(item.category))  return false;
       if (typeFilter === 'daily' && !DAILY_CATEGORIES.includes(item.category)) return false;
       if (typeFilter === 'other' && (FOOD_CATEGORIES.includes(item.category) || DAILY_CATEGORIES.includes(item.category))) return false;
