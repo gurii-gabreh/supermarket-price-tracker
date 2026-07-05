@@ -1131,6 +1131,30 @@ const History = {
     return icons[category] || '📦';
   },
 
+  // 単位換算（100gあたり・1個あたり）
+  _normalizePrice(price, unit, detail) {
+    const text = (unit + ' ' + detail).replace(/\s/g, '');
+    // グラム換算（100gあたり）
+    const gMatch = text.match(/(\d+(?:\.\d+)?)\s*g/i);
+    if (gMatch) {
+      const g = parseFloat(gMatch[1]);
+      if (g > 0) return { normalizedPrice: Math.round(price / g * 100), unit: '100gあたり' };
+    }
+    // kg換算
+    const kgMatch = text.match(/(\d+(?:\.\d+)?)\s*kg/i);
+    if (kgMatch) {
+      const kg = parseFloat(kgMatch[1]);
+      if (kg > 0) return { normalizedPrice: Math.round(price / (kg * 1000) * 100), unit: '100gあたり' };
+    }
+    // 個数換算（1個あたり）
+    const countMatch = text.match(/(\d+)\s*個/);
+    if (countMatch) {
+      const count = parseInt(countMatch[1]);
+      if (count > 1) return { normalizedPrice: Math.round(price / count), unit: '1個あたり' };
+    }
+    return { normalizedPrice: price, unit: unit || '' };
+  },
+
   _renderNormal(items) {
     const tbody = document.getElementById('historyTableBody');
     const thead = document.getElementById('historyTableHead');
@@ -1138,27 +1162,65 @@ const History = {
 
     thead.innerHTML = `<tr>
       <th style="width:48px">種別</th><th>品目</th><th>商品名</th>
-      <th>スーパー</th><th>価格</th>
+      <th>スーパー</th><th>価格</th><th>平均比較</th><th style="width:60px">最安値</th>
     </tr>`;
 
     tbody.innerHTML = '';
     if (items.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text3)">データがありません</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)">データがありません</td></tr>';
       return;
     }
 
+    // 品目ごとの換算価格・平均・最安値を計算
+    const itemStats = {};
     items.forEach(item => {
-      const tr = document.createElement('tr');
+      const name = item.itemName || '';
+      if (!name) return;
+      const { normalizedPrice } = this._normalizePrice(item.price, item.unit || '', item.detail || '');
+      if (!itemStats[name]) itemStats[name] = { prices: [], min: Infinity };
+      itemStats[name].prices.push(normalizedPrice);
+      if (normalizedPrice < itemStats[name].min) itemStats[name].min = normalizedPrice;
+    });
+
+    // 平均値を計算
+    Object.keys(itemStats).forEach(name => {
+      const prices = itemStats[name].prices;
+      itemStats[name].avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+    });
+
+    items.forEach(item => {
+      const tr   = document.createElement('tr');
       tr.style.cursor = 'pointer';
       const icon = this._getCategoryIcon(item.category);
+      const name = item.itemName || '';
+      const { normalizedPrice } = this._normalizePrice(item.price, item.unit || '', item.detail || '');
+
+      // 平均比較
+      let avgCell = '<td style="text-align:right">-</td>';
+      if (name && itemStats[name]) {
+        const diff = normalizedPrice - itemStats[name].avg;
+        if (diff < 0) {
+          avgCell = `<td style="text-align:right;color:#f38ba8;font-weight:700">-¥${Math.abs(diff).toLocaleString()}</td>`;
+        } else if (diff > 0) {
+          avgCell = `<td style="text-align:right;color:#89b4fa;font-weight:700">+¥${diff.toLocaleString()}</td>`;
+        } else {
+          avgCell = `<td style="text-align:right;color:var(--text3)">-</td>`;
+        }
+      }
+
+      // 最安値
+      const isCheapest = name && itemStats[name] && normalizedPrice === itemStats[name].min;
+      const cheapestCell = `<td style="text-align:center">${isCheapest ? '⭕' : ''}</td>`;
+
       tr.innerHTML = `
         <td style="text-align:center;font-size:20px" title="${item.category || ''}">${icon}</td>
         <td>${item.itemName || ''}</td>
         <td style="font-size:12px;color:var(--text2)">${item.name || ''}</td>
         <td>${item.storeName || ''}</td>
         <td class="price-cell">¥${Number(item.price).toLocaleString()}</td>
+        ${avgCell}
+        ${cheapestCell}
       `;
-      // レコードクリックでモーダル表示
       tr.addEventListener('click', () => this._showPriceModal(item));
       tbody.appendChild(tr);
     });
