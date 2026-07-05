@@ -137,6 +137,17 @@
     </div>
   </div>
 
+  <!-- 平均価格モーダル -->
+  <div id="priceModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:#1e1e2e;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:28px;width:90%;max-width:520px;max-height:80vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="color:#cdd6f4;font-size:16px;margin:0">📊 価格情報</h3>
+        <button id="btnClosePriceModal" style="background:none;border:none;color:#a6adc8;cursor:pointer;font-size:20px">✕</button>
+      </div>
+      <div id="priceModalBody"></div>
+    </div>
+  </div>
+
   <main class="main">
     <!-- タブ非表示（食品価格一覧のみ表示） -->
     <div class="main-tabs" id="mainTabs" style="display:none">
