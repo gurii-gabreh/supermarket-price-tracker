@@ -25,19 +25,25 @@ const App = {
     const modal    = document.getElementById('commandModal');
     const closeBtn = document.getElementById('btnCloseModal');
     const closeBtn2 = document.getElementById('btnCloseModal2');
-    if (!btn || !modal) return;
-
-    btn.addEventListener('click', () => {
-      modal.style.display = 'flex';
-    });
-    [closeBtn, closeBtn2].forEach(b => {
-      if (b) b.addEventListener('click', () => {
-        modal.style.display = 'none';
+    if (btn && modal) {
+      btn.addEventListener('click', () => { modal.style.display = 'flex'; });
+      [closeBtn, closeBtn2].forEach(b => {
+        if (b) b.addEventListener('click', () => { modal.style.display = 'none'; });
       });
-    });
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) modal.style.display = 'none';
-    });
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.style.display = 'none';
+      });
+    }
+
+    // 平均価格モーダルのクローズ
+    const priceModal    = document.getElementById('priceModal');
+    const closePriceBtn = document.getElementById('btnClosePriceModal');
+    if (priceModal && closePriceBtn) {
+      closePriceBtn.addEventListener('click', () => { priceModal.style.display = 'none'; });
+      priceModal.addEventListener('click', (e) => {
+        if (e.target === priceModal) priceModal.style.display = 'none';
+      });
+    }
   },
 
   // フィルタークリア
@@ -462,13 +468,66 @@ const Settings = {
   init() {
     this._initToggle();
     this._initSchedule();
-    this._initStoreSearchRows();
-    this._initAddRowBtn();
-    this._initCollectNowBtn();
+    this._initAddressRows();
     this._initSaveBtn();
-    this.renderRegisteredStores();
     const cfg = this.load();
     this._updateLastCollectedDisplay(cfg.lastCollectedAt || null);
+  },
+
+  // 登録住所を取得
+  getAddresses() {
+    return this.load().registeredAddresses || [];
+  },
+
+  // 登録住所を保存
+  saveAddresses(addresses) {
+    this.save({ registeredAddresses: addresses });
+  },
+
+  // 住所登録行の初期化
+  _initAddressRows() {
+    const container = document.getElementById('addressRows');
+    const addBtn    = document.getElementById('btnAddAddressRow');
+    if (!container) return;
+
+    // 保存済み住所を表示
+    const saved = this.getAddresses();
+    if (saved.length > 0) {
+      container.innerHTML = '';
+      saved.forEach((addr, i) => this._addAddressRow(container, addr, i === 0));
+    } else {
+      // 最初の行の削除ボタンを無効化
+      const firstDeleteBtn = container.querySelector('.address-delete-btn');
+      if (firstDeleteBtn) firstDeleteBtn.style.display = 'none';
+    }
+
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        this._addAddressRow(container, '', false);
+      });
+    }
+  },
+
+  // 住所行を追加
+  _addAddressRow(container, value, isFirst) {
+    const row = document.createElement('div');
+    row.className = 'address-row';
+    row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px';
+    row.innerHTML = `
+      <input type="text" class="field-input address-input" placeholder="例: 栃木県足利市小俣町" style="flex:1" value="${value}">
+      ${!isFirst ? `<button class="ghost-btn address-delete-btn" style="color:#f38ba8;border-color:rgba(243,139,168,0.4)">削除</button>` : '<div style="width:48px"></div>'}
+    `;
+    if (!isFirst) {
+      row.querySelector('.address-delete-btn').addEventListener('click', () => row.remove());
+    }
+    container.appendChild(row);
+  },
+
+  // 住所一覧をUIから取得
+  _getAddressesFromUI() {
+    return [...document.querySelectorAll('.address-input')]
+      .map(input => input.value.trim())
+      .filter(Boolean);
   },
 
   // トグルボタン初期化
@@ -591,7 +650,7 @@ const Settings = {
     });
   },
 
-  // 保存ボタン（スケジュール・スーパー登録・トリガー更新）
+  // 保存ボタン（スケジュール・住所登録・GAS保存）
   _initSaveBtn() {
     const btn = document.getElementById('btnSaveConfig');
     if (!btn) return;
@@ -604,23 +663,25 @@ const Settings = {
       const times = this._getScheduleTimesFromUI();
       this.saveScheduleTimes(times);
 
+      // 住所を保存
+      const addresses = this._getAddressesFromUI();
+      this.saveAddresses(addresses);
+
       if (gasUrl) {
         btn.textContent = '保存中...';
         btn.disabled    = true;
         try {
-          // ① 登録スーパーをスプレッドシートに保存（全件まとめてPOST no-cors）
-          const stores = this.getStores();
-          if (stores.length > 0) {
-            // データが大きいのでPOSTのno-corsで送信
+          // 住所をGASに保存
+          if (addresses.length > 0) {
             await fetch(gasUrl, {
               method:  'POST',
               mode:    'no-cors',
               headers: { 'Content-Type': 'application/json' },
-              body:    JSON.stringify({ action: 'saveStores', stores: stores }),
+              body:    JSON.stringify({ action: 'saveAddresses', addresses }),
             });
           }
 
-          // ② トリガーを更新
+          // スケジュール設定を更新
           const autoOn = this.getAutoCollect();
           const triggerParams = new URLSearchParams({
             action:        'updateTriggers',
@@ -631,15 +692,12 @@ const Settings = {
           const data = await res.json();
 
           if (data.success) {
-            UI.toast(
-              `設定を保存しました。トリガー${data.triggerCount}件を更新しました`,
-              'success', 5000
-            );
+            UI.toast(`設定を保存しました`, 'success', 3000);
           } else {
-            UI.toast('設定を保存しました（トリガー更新失敗: ' + (data.error || '不明') + '）', 'info');
+            UI.toast('設定を保存しました', 'success');
           }
         } catch (e) {
-          UI.toast('設定を保存しました（一部失敗）', 'info');
+          UI.toast('設定を保存しました', 'success');
           console.warn('保存失敗:', e);
         } finally {
           btn.textContent = '保存する';
@@ -1012,7 +1070,7 @@ const History = {
   },
 
   _getFilteredData() {
-    const FOOD_CATEGORIES  = ['野菜・果物', '肉・鶏', '魚介類', '乳製品・卵', 'パン・米', '飲料', '冷凍食品', '調味料'];
+    const FOOD_CATEGORIES  = ['野菜', '果物', '肉・鶏', '魚介類', '乳製品', '卵', 'パン', '米', '飲料', '冷凍食品', '調味料'];
     const DAILY_CATEGORIES = ['生活雑貨'];
 
     const address        = document.getElementById('historyAddressSelect')?.value || '';
@@ -1049,33 +1107,136 @@ const History = {
     }
   },
 
+  // カテゴリアイコンマッピング
+  _getCategoryIcon(category) {
+    const icons = {
+      '野菜':    '🥬',
+      '果物':    '🍎',
+      '肉・鶏':  '🥩',
+      '魚介類':  '🐟',
+      '乳製品':  '🧀',
+      '卵':      '🥚',
+      'パン':    '🍞',
+      '米':      '🍚',
+      '飲料':    '🧃',
+      '冷凍食品':'❄️',
+      '調味料':  '🧂',
+      '生活雑貨':'🧹',
+      'その他':  '📦',
+    };
+    return icons[category] || '📦';
+  },
+
   _renderNormal(items) {
     const tbody = document.getElementById('historyTableBody');
     const thead = document.getElementById('historyTableHead');
     if (!tbody || !thead) return;
 
     thead.innerHTML = `<tr>
-      <th>品目</th><th>商品名</th><th>カテゴリ</th>
+      <th style="width:48px">種別</th><th>品目</th><th>商品名</th>
       <th>スーパー</th><th>価格</th>
     </tr>`;
 
     tbody.innerHTML = '';
     if (items.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)">データがありません</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text3)">データがありません</td></tr>';
       return;
     }
 
     items.forEach(item => {
       const tr = document.createElement('tr');
+      tr.style.cursor = 'pointer';
+      const icon = this._getCategoryIcon(item.category);
       tr.innerHTML = `
+        <td style="text-align:center;font-size:20px" title="${item.category || ''}">${icon}</td>
         <td>${item.itemName || ''}</td>
-        <td>${item.name || ''}</td>
-        <td><span class="cat-chip">${item.category || ''}</span></td>
+        <td style="font-size:12px;color:var(--text2)">${item.name || ''}</td>
         <td>${item.storeName || ''}</td>
         <td class="price-cell">¥${Number(item.price).toLocaleString()}</td>
       `;
+      // レコードクリックでモーダル表示
+      tr.addEventListener('click', () => this._showPriceModal(item));
       tbody.appendChild(tr);
     });
+  },
+
+  // 平均価格モーダル表示
+  async _showPriceModal(item) {
+    const modal = document.getElementById('priceModal');
+    const body  = document.getElementById('priceModalBody');
+    if (!modal || !body) return;
+
+    const icon = this._getCategoryIcon(item.category);
+    body.innerHTML = `
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-size:48px">${icon}</div>
+        <div style="font-size:20px;font-weight:700;color:var(--text);margin-top:8px">${item.itemName || item.name}</div>
+        <div style="font-size:13px;color:var(--text3);margin-top:4px">${item.category}</div>
+      </div>
+      <div id="modalPriceStats" style="text-align:center;color:var(--text3);padding:20px">読み込み中...</div>
+    `;
+    modal.style.display = 'flex';
+
+    // 平均価格を計算
+    const address = document.getElementById('historyAddressSelect')?.value || '';
+    const itemName = item.itemName || '';
+
+    // allDataから同じ品目のデータを期間別に集計
+    const now     = new Date();
+    const today   = now.toISOString().substring(0, 10);
+    const week    = new Date(now - 7  * 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
+    const month   = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
+
+    const calc = (data) => {
+      if (!data.length) return null;
+      const prices = data.map(i => i.price);
+      const avg    = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+      const min    = Math.min(...prices);
+      const max    = Math.max(...prices);
+      return { avg, min, max, count: prices.length };
+    };
+
+    const sameItem = this.allData.filter(i => i.itemName === itemName);
+    const todayData = sameItem.filter(i => i.collectedAt?.substring(0, 10) === today);
+    const weekData  = sameItem.filter(i => i.collectedAt?.substring(0, 10) >= week);
+    const monthData = sameItem.filter(i => i.collectedAt?.substring(0, 10) >= month);
+
+    const todayStat = calc(todayData);
+    const weekStat  = calc(weekData);
+    const monthStat = calc(monthData);
+
+    const row = (label, stat) => stat
+      ? `<tr>
+           <td style="padding:10px 16px;color:var(--text3);font-size:13px">${label}</td>
+           <td style="padding:10px 16px;text-align:right;font-weight:700;color:var(--text)">¥${stat.avg.toLocaleString()}</td>
+           <td style="padding:10px 16px;text-align:right;color:#a6e3a1">¥${stat.min.toLocaleString()}</td>
+           <td style="padding:10px 16px;text-align:right;color:#f38ba8">¥${stat.max.toLocaleString()}</td>
+           <td style="padding:10px 16px;text-align:right;color:var(--text3);font-size:12px">${stat.count}件</td>
+         </tr>`
+      : `<tr><td colspan="5" style="padding:10px 16px;color:var(--text3);font-size:12px">${label}: データなし</td></tr>`;
+
+    document.getElementById('modalPriceStats').innerHTML = `
+      <div style="margin-bottom:12px;font-size:13px;color:var(--text3)">
+        現在の価格: <span style="font-size:18px;font-weight:700;color:var(--text)">¥${Number(item.price).toLocaleString()}</span>
+        <span style="font-size:12px;margin-left:8px">${item.storeName}</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <th style="padding:8px 16px;text-align:left;color:var(--text3);font-size:12px">期間</th>
+            <th style="padding:8px 16px;text-align:right;color:var(--text3);font-size:12px">平均</th>
+            <th style="padding:8px 16px;text-align:right;color:#a6e3a1;font-size:12px">最安値</th>
+            <th style="padding:8px 16px;text-align:right;color:#f38ba8;font-size:12px">最高値</th>
+            <th style="padding:8px 16px;text-align:right;color:var(--text3);font-size:12px">件数</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${row('本日', todayStat)}
+          ${row('1週間', weekStat)}
+          ${row('1か月', monthStat)}
+        </tbody>
+      </table>
+    `;
   },
 
   _renderCheapest(items) {
@@ -1100,7 +1261,7 @@ const History = {
     });
 
     thead.innerHTML = `<tr>
-      <th>品目</th><th>スーパー</th><th>価格</th><th>詳細</th><th>カテゴリ</th><th>備考</th>
+      <th style="width:48px">種別</th><th>品目</th><th>スーパー</th><th>価格</th><th>詳細</th><th>備考</th>
     </tr>`;
 
     tbody.innerHTML = '';
@@ -1120,14 +1281,15 @@ const History = {
         const tr      = document.createElement('tr');
         const isCheap = store === cheapest;
         tr.style.cssText = isCheap && isMulti ? 'background:rgba(166,227,161,0.08)' : '';
+        const catIcon = this._getCategoryIcon(storeData[store].category);
         tr.innerHTML = `
+          <td style="text-align:center;font-size:18px">${idx === 0 ? catIcon : ''}</td>
           <td style="font-weight:${idx === 0 ? '600' : '400'}">${idx === 0 ? itemName : ''}</td>
           <td>${store}</td>
           <td class="price-cell" style="${isCheap && isMulti ? 'color:#a6e3a1;font-weight:700' : ''}">
             ¥${Number(storeData[store].price).toLocaleString()}
           </td>
           <td style="font-size:12px;color:var(--text3)">${storeData[store].detail}</td>
-          <td><span class="cat-chip" style="font-size:11px">${storeData[store].category}</span></td>
           <td>${isCheap && isMulti ? '<span class="sale-badge" style="background:rgba(166,227,161,0.2);color:#a6e3a1">★最安値</span>' : ''}</td>
         `;
         tbody.appendChild(tr);
