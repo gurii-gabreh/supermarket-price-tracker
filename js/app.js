@@ -1252,8 +1252,8 @@ const History = {
     const week  = new Date(now - 7  * 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
     const month = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
 
-    // 同じ品目のデータを取得
-    const sameItem = this.allData.filter(i => i.itemName === itemName);
+    // フィルター後のデータから同じ品目を取得
+    const sameItem = this._getFilteredData().filter(i => i.itemName === itemName);
 
     // 集計関数
     const calc = (data) => {
@@ -1309,9 +1309,11 @@ const History = {
       }
     };
 
-    // 類似品（本日・同スーパー → 他スーパー）
-    const sameStoreItems  = todayAll.filter(i => i.storeName === item.storeName && i.name !== itemNameFull);
-    const otherStoreItems = todayAll.filter(i => i.storeName !== item.storeName);
+    // 類似品（フィルター後データ・同スーパー → 他スーパー）
+    const filteredData    = this._getFilteredData();
+    const sameItemData    = filteredData.filter(i => i.itemName === itemName);
+    const sameStoreItems  = sameItemData.filter(i => i.storeName === item.storeName && i.name !== itemNameFull);
+    const otherStoreItems = sameItemData.filter(i => i.storeName !== item.storeName);
 
     const similarRow = (i) => `
       <tr style="border-bottom:1px solid var(--border)">
