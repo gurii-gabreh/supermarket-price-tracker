@@ -1226,83 +1226,171 @@ const History = {
     });
   },
 
+  // 国産判定
+  _isDomestic(detail) {
+    const text = (detail || '').toLowerCase();
+    return text.includes('国産') || text.includes('国内産') || text.includes('japanese');
+  },
+
   // 平均価格モーダル表示
   async _showPriceModal(item) {
     const modal = document.getElementById('priceModal');
     const body  = document.getElementById('priceModalBody');
     if (!modal || !body) return;
 
-    const icon = this._getCategoryIcon(item.category);
-    body.innerHTML = `
-      <div style="text-align:center;margin-bottom:16px">
-        <div style="font-size:48px">${icon}</div>
-        <div style="font-size:20px;font-weight:700;color:var(--text);margin-top:8px">${item.itemName || item.name}</div>
-        <div style="font-size:13px;color:var(--text3);margin-top:4px">${item.category}</div>
-      </div>
-      <div id="modalPriceStats" style="text-align:center;color:var(--text3);padding:20px">読み込み中...</div>
-    `;
-    modal.style.display = 'flex';
+    const icon      = this._getCategoryIcon(item.category);
+    const itemName  = item.itemName || '';
+    const itemNameFull = item.name || '';
 
-    // 平均価格を計算
-    const address = document.getElementById('historyAddressSelect')?.value || '';
-    const itemName = item.itemName || '';
+    // 国産・外国産で分ける対象カテゴリ
+    const domesticCategories = ['野菜', '果物', '魚介類', '肉・鶏'];
+    const useDomestic        = domesticCategories.includes(item.category);
 
-    // allDataから同じ品目のデータを期間別に集計
-    const now     = new Date();
-    const today   = now.toISOString().substring(0, 10);
-    const week    = new Date(now - 7  * 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
-    const month   = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
+    // 期間設定
+    const now   = new Date();
+    const today = now.toISOString().substring(0, 10);
+    const week  = new Date(now - 7  * 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
+    const month = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
 
+    // 同じ品目のデータを取得
+    const sameItem = this.allData.filter(i => i.itemName === itemName);
+
+    // 集計関数
     const calc = (data) => {
       if (!data.length) return null;
       const prices = data.map(i => i.price);
       const avg    = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
-      const min    = Math.min(...prices);
-      const max    = Math.max(...prices);
-      return { avg, min, max, count: prices.length };
+      return { avg, min: Math.min(...prices), max: Math.max(...prices), count: prices.length };
     };
 
-    const sameItem = this.allData.filter(i => i.itemName === itemName);
-    const todayData = sameItem.filter(i => i.collectedAt?.substring(0, 10) === today);
-    const weekData  = sameItem.filter(i => i.collectedAt?.substring(0, 10) >= week);
-    const monthData = sameItem.filter(i => i.collectedAt?.substring(0, 10) >= month);
+    // 国産/外国産フィルター
+    const filterByOrigin = (data, domestic) => data.filter(i =>
+      domestic ? this._isDomestic(i.detail) : !this._isDomestic(i.detail)
+    );
 
-    const todayStat = calc(todayData);
-    const weekStat  = calc(weekData);
-    const monthStat = calc(monthData);
+    // 期間別データ
+    const todayAll  = sameItem.filter(i => (i.collectedAt || '').substring(0, 10) === today);
+    const weekAll   = sameItem.filter(i => (i.collectedAt || '').substring(0, 10) >= week);
+    const monthAll  = sameItem.filter(i => (i.collectedAt || '').substring(0, 10) >= month);
 
-    const row = (label, stat) => stat
-      ? `<tr>
-           <td style="padding:10px 16px;color:var(--text3);font-size:13px">${label}</td>
-           <td style="padding:10px 16px;text-align:right;font-weight:700;color:var(--text)">¥${stat.avg.toLocaleString()}</td>
-           <td style="padding:10px 16px;text-align:right;color:#a6e3a1">¥${stat.min.toLocaleString()}</td>
-           <td style="padding:10px 16px;text-align:right;color:#f38ba8">¥${stat.max.toLocaleString()}</td>
-           <td style="padding:10px 16px;text-align:right;color:var(--text3);font-size:12px">${stat.count}件</td>
-         </tr>`
-      : `<tr><td colspan="5" style="padding:10px 16px;color:var(--text3);font-size:12px">${label}: データなし</td></tr>`;
+    // 平均計算（国産/外国産 or 同じ商品名）
+    const buildStats = (data) => {
+      if (useDomestic) {
+        return {
+          domestic: calc(filterByOrigin(data, true)),
+          foreign:  calc(filterByOrigin(data, false)),
+        };
+      } else {
+        const sameName = data.filter(i => i.name === itemNameFull);
+        return { sameName: calc(sameName) };
+      }
+    };
 
-    document.getElementById('modalPriceStats').innerHTML = `
-      <div style="margin-bottom:12px;font-size:13px;color:var(--text3)">
-        現在の価格: <span style="font-size:18px;font-weight:700;color:var(--text)">¥${Number(item.price).toLocaleString()}</span>
-        <span style="font-size:12px;margin-left:8px">${item.storeName}</span>
+    const todayStat = buildStats(todayAll);
+    const weekStat  = buildStats(weekAll);
+    const monthStat = buildStats(monthAll);
+
+    // 行レンダリング
+    const statRow = (label, stat) => {
+      if (!stat) return `<tr><td colspan="4" style="padding:8px 16px;color:var(--text3);font-size:12px">${label}: データなし</td></tr>`;
+      return `<tr>
+        <td style="padding:8px 16px;color:var(--text3);font-size:13px">${label}</td>
+        <td style="padding:8px 16px;text-align:right;font-weight:700;color:var(--text)">¥${stat.avg.toLocaleString()}</td>
+        <td style="padding:8px 16px;text-align:right;color:#a6e3a1;font-size:12px">¥${stat.min.toLocaleString()}</td>
+        <td style="padding:8px 16px;text-align:right;color:var(--text3);font-size:12px">${stat.count}件</td>
+      </tr>`;
+    };
+
+    const buildPeriodRows = (label, stat) => {
+      if (useDomestic) {
+        return statRow(label + '（国産）', stat.domestic) + statRow(label + '（外国産）', stat.foreign);
+      } else {
+        return statRow(label, stat.sameName);
+      }
+    };
+
+    // 類似品（本日・同スーパー → 他スーパー）
+    const sameStoreItems  = todayAll.filter(i => i.storeName === item.storeName && i.name !== itemNameFull);
+    const otherStoreItems = todayAll.filter(i => i.storeName !== item.storeName);
+
+    const similarRow = (i) => `
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:6px 12px;font-size:13px;color:var(--text)">${i.name}</td>
+        <td style="padding:6px 12px;font-size:12px;color:var(--text3)">${i.storeName}</td>
+        <td style="padding:6px 12px;text-align:right;font-weight:600;color:var(--text)">¥${Number(i.price).toLocaleString()}</td>
+      </tr>`;
+
+    const similarHTML = sameStoreItems.length === 0 && otherStoreItems.length === 0
+      ? '<p style="color:var(--text3);font-size:13px;padding:12px">類似品データなし</p>'
+      : `<table style="width:100%;border-collapse:collapse">
+          ${sameStoreItems.length > 0 ? `
+            <tr><td colspan="3" style="padding:6px 12px;font-size:11px;color:var(--text3);background:var(--bg3)">同じスーパーの類似品</td></tr>
+            ${sameStoreItems.map(similarRow).join('')}
+          ` : ''}
+          ${otherStoreItems.length > 0 ? `
+            <tr><td colspan="3" style="padding:6px 12px;font-size:11px;color:var(--text3);background:var(--bg3)">他スーパーの同じ品種</td></tr>
+            ${otherStoreItems.map(similarRow).join('')}
+          ` : ''}
+        </table>`;
+
+    const avgNote = useDomestic
+      ? '※ 野菜・果物・魚介類・肉は国産／外国産で平均を分けて表示しています'
+      : '※ 同じ商品名のデータで平均を計算しています';
+
+    body.innerHTML = `
+      <!-- 商品名 -->
+      <div style="margin-bottom:16px">
+        <div style="font-size:20px;font-weight:700;color:var(--text)">${itemNameFull}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px">${itemName}</div>
+        <div style="font-size:13px;color:var(--text3);margin-top:4px">
+          現在の価格: <span style="font-weight:700;color:var(--text)">¥${Number(item.price).toLocaleString()}</span>
+          <span style="margin-left:8px">${item.storeName}</span>
+        </div>
       </div>
-      <table style="width:100%;border-collapse:collapse">
-        <thead>
-          <tr style="border-bottom:1px solid var(--border)">
-            <th style="padding:8px 16px;text-align:left;color:var(--text3);font-size:12px">期間</th>
-            <th style="padding:8px 16px;text-align:right;color:var(--text3);font-size:12px">平均</th>
-            <th style="padding:8px 16px;text-align:right;color:#a6e3a1;font-size:12px">最安値</th>
-            <th style="padding:8px 16px;text-align:right;color:#f38ba8;font-size:12px">最高値</th>
-            <th style="padding:8px 16px;text-align:right;color:var(--text3);font-size:12px">件数</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${row('本日', todayStat)}
-          ${row('1週間', weekStat)}
-          ${row('1か月', monthStat)}
-        </tbody>
-      </table>
+
+      <!-- 期間別平均 -->
+      <div style="margin-bottom:16px">
+        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px">期間別平均</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${avgNote}</div>
+        <table style="width:100%;border-collapse:collapse;border-top:1px solid var(--border)">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border)">
+              <th style="padding:6px 16px;text-align:left;color:var(--text3);font-size:12px">期間</th>
+              <th style="padding:6px 16px;text-align:right;color:var(--text3);font-size:12px">平均</th>
+              <th style="padding:6px 16px;text-align:right;color:#a6e3a1;font-size:12px">最安値</th>
+              <th style="padding:6px 16px;text-align:right;color:var(--text3);font-size:12px">件数</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${buildPeriodRows('本日', todayStat)}
+            ${buildPeriodRows('1週間', weekStat)}
+            ${buildPeriodRows('1か月', monthStat)}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 類似品一覧（アコーディオン） -->
+      <div style="border-top:1px solid var(--border);padding-top:12px">
+        <div id="similarToggle" style="font-size:14px;font-weight:700;color:var(--text);cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:4px 0">
+          <span>類似品一覧</span>
+          <span style="font-size:12px;color:var(--text3)">▶ タップして展開</span>
+        </div>
+        <div id="similarContent" style="display:none;margin-top:8px">
+          ${similarHTML}
+        </div>
+      </div>
     `;
+
+    modal.style.display = 'flex';
+
+    // アコーディオンの開閉
+    document.getElementById('similarToggle').addEventListener('click', () => {
+      const content  = document.getElementById('similarContent');
+      const toggle   = document.getElementById('similarToggle').querySelector('span:last-child');
+      const isOpen   = content.style.display !== 'none';
+      content.style.display = isOpen ? 'none' : 'block';
+      toggle.textContent    = isOpen ? '▶ タップして展開' : '▼ 閉じる';
+    });
   },
 
   _renderCheapest(items) {
