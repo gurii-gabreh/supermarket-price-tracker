@@ -671,14 +671,18 @@ const Settings = {
         btn.textContent = '保存中...';
         btn.disabled    = true;
         try {
-          // 住所をGASに保存
+          // 住所をGASに保存してスーパーを自動取得
           if (addresses.length > 0) {
-            await fetch(gasUrl, {
-              method:  'POST',
-              mode:    'no-cors',
-              headers: { 'Content-Type': 'application/json' },
-              body:    JSON.stringify({ action: 'saveAddresses', addresses }),
+            UI.toast('住所からスーパーを検索中...', 'info', 5000);
+            const addrParams = new URLSearchParams({
+              action:    'saveAddresses',
+              addresses: JSON.stringify(addresses),
             });
+            const addrRes  = await fetch(`${gasUrl}?${addrParams}`);
+            const addrData = await addrRes.json();
+            if (addrData.success) {
+              UI.toast(`${addrData.storeCount}件のスーパーを登録しました`, 'success', 4000);
+            }
           }
 
           // スケジュール設定を更新
