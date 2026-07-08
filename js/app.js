@@ -1162,55 +1162,19 @@ const History = {
 
     thead.innerHTML = `<tr>
       <th style="width:48px">種別</th><th>品目</th><th>商品名</th>
-      <th>スーパー</th><th>価格</th><th>平均比較</th><th style="width:60px">最安値</th>
+      <th>スーパー</th><th>価格</th>
     </tr>`;
 
     tbody.innerHTML = '';
     if (items.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)">データがありません</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text3)">データがありません</td></tr>';
       return;
     }
-
-    // 品目ごとの換算価格・平均・最安値を計算
-    const itemStats = {};
-    items.forEach(item => {
-      const name = item.itemName || '';
-      if (!name) return;
-      const { normalizedPrice } = this._normalizePrice(item.price, item.unit || '', item.detail || '');
-      if (!itemStats[name]) itemStats[name] = { prices: [], min: Infinity };
-      itemStats[name].prices.push(normalizedPrice);
-      if (normalizedPrice < itemStats[name].min) itemStats[name].min = normalizedPrice;
-    });
-
-    // 平均値を計算
-    Object.keys(itemStats).forEach(name => {
-      const prices = itemStats[name].prices;
-      itemStats[name].avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
-    });
 
     items.forEach(item => {
       const tr   = document.createElement('tr');
       tr.style.cursor = 'pointer';
       const icon = this._getCategoryIcon(item.category);
-      const name = item.itemName || '';
-      const { normalizedPrice } = this._normalizePrice(item.price, item.unit || '', item.detail || '');
-
-      // 平均比較
-      let avgCell = '<td style="text-align:right">-</td>';
-      if (name && itemStats[name]) {
-        const diff = normalizedPrice - itemStats[name].avg;
-        if (diff < 0) {
-          avgCell = `<td style="text-align:right;color:#f38ba8;font-weight:700">-¥${Math.abs(diff).toLocaleString()}</td>`;
-        } else if (diff > 0) {
-          avgCell = `<td style="text-align:right;color:#89b4fa;font-weight:700">+¥${diff.toLocaleString()}</td>`;
-        } else {
-          avgCell = `<td style="text-align:right;color:var(--text3)">-</td>`;
-        }
-      }
-
-      // 最安値
-      const isCheapest = name && itemStats[name] && normalizedPrice === itemStats[name].min;
-      const cheapestCell = `<td style="text-align:center">${isCheapest ? '⭕' : ''}</td>`;
 
       tr.innerHTML = `
         <td style="text-align:center;font-size:20px" title="${item.category || ''}">${icon}</td>
@@ -1218,8 +1182,6 @@ const History = {
         <td style="font-size:12px;color:var(--text2)">${item.name || ''}</td>
         <td>${item.storeName || ''}</td>
         <td class="price-cell">¥${Number(item.price).toLocaleString()}</td>
-        ${avgCell}
-        ${cheapestCell}
       `;
       tr.addEventListener('click', () => this._showPriceModal(item));
       tbody.appendChild(tr);
@@ -1241,73 +1203,6 @@ const History = {
     const icon      = this._getCategoryIcon(item.category);
     const itemName  = item.itemName || '';
     const itemNameFull = item.name || '';
-
-    // 国産・外国産で分ける対象カテゴリ
-    const domesticCategories = ['野菜', '果物', '魚介類', '肉・鶏'];
-    const useDomestic        = domesticCategories.includes(item.category);
-
-    // 期間設定
-    const now   = new Date();
-    const today = now.toISOString().substring(0, 10);
-    const week  = new Date(now - 7  * 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
-    const month = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10);
-
-    // フィルター後のデータから同じ品目を取得
-    const sameItem = this._getFilteredData().filter(i => i.itemName === itemName);
-
-    // 集計関数
-    const calc = (data) => {
-      if (!data.length) return null;
-      const prices = data.map(i => i.price);
-      const avg    = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
-      return { avg, min: Math.min(...prices), max: Math.max(...prices), count: prices.length };
-    };
-
-    // 国産/外国産フィルター
-    const filterByOrigin = (data, domestic) => data.filter(i =>
-      domestic ? this._isDomestic(i.detail) : !this._isDomestic(i.detail)
-    );
-
-    // 期間別データ
-    const todayAll  = sameItem.filter(i => (i.collectedAt || '').substring(0, 10) === today);
-    const weekAll   = sameItem.filter(i => (i.collectedAt || '').substring(0, 10) >= week);
-    const monthAll  = sameItem.filter(i => (i.collectedAt || '').substring(0, 10) >= month);
-
-    // 平均計算（国産/外国産 or 同じ商品名）
-    const buildStats = (data) => {
-      if (useDomestic) {
-        return {
-          domestic: calc(filterByOrigin(data, true)),
-          foreign:  calc(filterByOrigin(data, false)),
-        };
-      } else {
-        const sameName = data.filter(i => i.name === itemNameFull);
-        return { sameName: calc(sameName) };
-      }
-    };
-
-    const todayStat = buildStats(todayAll);
-    const weekStat  = buildStats(weekAll);
-    const monthStat = buildStats(monthAll);
-
-    // 行レンダリング
-    const statRow = (label, stat) => {
-      if (!stat) return `<tr><td colspan="4" style="padding:8px 16px;color:var(--text3);font-size:12px">${label}: データなし</td></tr>`;
-      return `<tr>
-        <td style="padding:8px 16px;color:var(--text3);font-size:13px">${label}</td>
-        <td style="padding:8px 16px;text-align:right;font-weight:700;color:var(--text)">¥${stat.avg.toLocaleString()}</td>
-        <td style="padding:8px 16px;text-align:right;color:#a6e3a1;font-size:12px">¥${stat.min.toLocaleString()}</td>
-        <td style="padding:8px 16px;text-align:right;color:var(--text3);font-size:12px">${stat.count}件</td>
-      </tr>`;
-    };
-
-    const buildPeriodRows = (label, stat) => {
-      if (useDomestic) {
-        return statRow(label + '（国産）', stat.domestic) + statRow(label + '（外国産）', stat.foreign);
-      } else {
-        return statRow(label, stat.sameName);
-      }
-    };
 
     // 類似品（フィルター後データ・同スーパー → 他スーパー）
     const filteredData    = this._getFilteredData();
@@ -1335,10 +1230,6 @@ const History = {
           ` : ''}
         </table>`;
 
-    const avgNote = useDomestic
-      ? '※ 野菜・果物・魚介類・肉は国産／外国産で平均を分けて表示しています'
-      : '※ 同じ商品名のデータで平均を計算しています';
-
     body.innerHTML = `
       <!-- 商品名 -->
       <div style="margin-bottom:16px">
@@ -1348,27 +1239,6 @@ const History = {
           現在の価格: <span style="font-weight:700;color:var(--text)">¥${Number(item.price).toLocaleString()}</span>
           <span style="margin-left:8px">${item.storeName}</span>
         </div>
-      </div>
-
-      <!-- 期間別平均 -->
-      <div style="margin-bottom:16px">
-        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px">期間別平均</div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${avgNote}</div>
-        <table style="width:100%;border-collapse:collapse;border-top:1px solid var(--border)">
-          <thead>
-            <tr style="border-bottom:1px solid var(--border)">
-              <th style="padding:6px 16px;text-align:left;color:var(--text3);font-size:12px">期間</th>
-              <th style="padding:6px 16px;text-align:right;color:var(--text3);font-size:12px">平均</th>
-              <th style="padding:6px 16px;text-align:right;color:#a6e3a1;font-size:12px">最安値</th>
-              <th style="padding:6px 16px;text-align:right;color:var(--text3);font-size:12px">件数</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${buildPeriodRows('本日', todayStat)}
-            ${buildPeriodRows('1週間', weekStat)}
-            ${buildPeriodRows('1か月', monthStat)}
-          </tbody>
-        </table>
       </div>
 
       <!-- 類似品一覧（アコーディオン） -->
