@@ -1009,7 +1009,6 @@ const History = {
           : (this.filterOptions.allStores || []);
         // スーパー選択肢を住所に連動して更新
         this._createMultiSelect('storeMultiSelect', stores, 'スーパーを選択...');
-        this._loadDates();
         // 品種選択肢をリセット
         const itemWrap = document.getElementById('itemMultiSelectWrap');
         if (itemWrap) itemWrap.style.display = 'none';
