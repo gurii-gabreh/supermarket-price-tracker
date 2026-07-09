@@ -17,6 +17,18 @@ const App = {
     this._bindClearFilter();
     // 設定画面初期化
     Settings.init();
+    // トップ画面の「デモモード」ボタンから遷移した場合、自動でデモモードを開始
+    this._autoStartDemoFromUrl();
+  },
+
+  // URLパラメータ ?demo=1 でデモモードを自動起動（home.htmlのデモボタンから遷移した場合）
+  _autoStartDemoFromUrl() {
+    if (!document.getElementById('storesSection')) return; // このページにデモ表示先がなければ何もしない
+    const params = new URLSearchParams(location.search);
+    if (params.get('demo') !== '1' || DemoMode.isActive()) return;
+    DemoMode.enable();
+    UI.toast('🎬 デモモードON — サンプルデータで動作します', 'info', 5000);
+    this._showDemoStores();
   },
 
   // コマンドモーダル
@@ -127,20 +139,21 @@ const App = {
   },
 
   _bindEvents() {
-    document.getElementById('btnSearchStores').addEventListener('click',  () => this.searchStores());
-    document.getElementById('addressInput').addEventListener('keydown', e => {
+    document.getElementById('btnSearchStores')?.addEventListener('click',  () => this.searchStores());
+    document.getElementById('addressInput')?.addEventListener('keydown', e => {
       if (e.key === 'Enter') this.searchStores();
     });
-    document.getElementById('addressInput').addEventListener('focus', () => {
-      document.getElementById('searchField').style.borderColor = 'var(--lime)';
+    document.getElementById('addressInput')?.addEventListener('focus', () => {
+      const field = document.getElementById('searchField');
+      if (field) field.style.borderColor = 'var(--lime)';
     });
-    document.getElementById('addressInput').addEventListener('blur', () => {
-      document.getElementById('searchField').style.borderColor = '';
+    document.getElementById('addressInput')?.addEventListener('blur', () => {
+      const field = document.getElementById('searchField');
+      if (field) field.style.borderColor = '';
     });
-    document.getElementById('btnSelectAll').addEventListener('click',   () => UI.selectAllStores());
-    document.getElementById('btnCollectPrices').addEventListener('click', () => this.collectPrices());
-    document.getElementById('btnReCollect').addEventListener('click',    () => this.collectPrices());
-    document.getElementById('btnExportSheet').addEventListener('click',  () => this.exportToSheet());
+    document.getElementById('btnSelectAll')?.addEventListener('click',   () => UI.selectAllStores());
+    document.getElementById('btnCollectPrices')?.addEventListener('click', () => this.collectPrices());
+    document.getElementById('btnReCollect')?.addEventListener('click',    () => this.collectPrices());
   },
 
   // ── スーパー検索 ──
@@ -282,10 +295,12 @@ const App = {
     if (gasUrl && merged.length > 0) {
       try {
         await Scraper.saveToSheet(merged, selected, this.collectedAt);
+        UI.showSaveStatus(true, '✓ Googleスプレッドシートに保存しました');
         // 最終収集時間を設定に保存
         Settings.saveLastCollected(this.collectedAt);
       } catch (e) {
         console.warn('自動保存失敗:', e);
+        UI.showSaveStatus(false, `✕ スプレッドシートへの保存に失敗しました: ${e.message}`);
       }
     }
 
@@ -303,32 +318,6 @@ const App = {
   async _demoFetch(store) {
     await new Promise(r => setTimeout(r, 400 + Math.random() * 700));
     return Scraper.generateDemoData(store);
-  },
-
-  // ── スプレッドシート保存 ──
-  async exportToSheet() {
-    if (!Config.get('gasUrl')) {
-      UI.toast('設定でGAS URLを入力してください', 'error');
-      return;
-    }
-    if (!this.collectedData?.length) {
-      UI.toast('先にチラシ収集を実行してください', 'error');
-      return;
-    }
-    const btn = document.getElementById('btnExportSheet');
-    btn.disabled = true;
-    btn.textContent = '保存中...';
-    try {
-      await Scraper.saveToSheet(this.collectedData, this.collectedStores, this.collectedAt);
-      UI.showSaveStatus(true, '✓ Googleスプレッドシートに保存しました');
-      UI.toast('スプレッドシートに保存しました', 'success');
-    } catch (e) {
-      UI.showSaveStatus(false, `✕ 保存に失敗しました: ${e.message}`);
-      UI.toast('保存に失敗しました', 'error');
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> シートに保存';
-    }
   },
 
   _demoStores(address) {
