@@ -11,7 +11,7 @@ const UI = {
   mergedItems:       [],
   allStores:         [],
   noChirashiStores:  [],
-  sortColumn:        'name',
+  sortColumn:        null,
   sortAsc:           true,
 
   // ── トースト ──
@@ -329,55 +329,66 @@ const UI = {
     const items = this.currentCategory === 'all'
       ? allItems : allItems.filter(i => i.category === this.currentCategory);
 
+    // フラットな行データを作成（品目 × スーパー × 商品）
+    const rows = [];
+    items.forEach(item => {
+      stores.forEach(store => {
+        const products = item.stores[store.id];
+        if (!products || products.length === 0) return;
+        products.forEach(p => {
+          rows.push({
+            itemName:      item.itemName,
+            category:      item.category,
+            storeName:     store.name,
+            detail:        p.detail || p.name,
+            price:         p.price,
+            originalPrice: p.originalPrice,
+            isSale:        p.isSale,
+            validDate:     p.validDate,
+            isMin:         item.minStoreId === store.id && p.price === item.minPrice,
+          });
+        });
+      });
+    });
+
     const thead = document.getElementById('priceTableHead');
     const tbody = document.getElementById('priceTableBody');
 
-    thead.innerHTML = `<tr>
-      <th>品目</th>
-      ${stores.map(s => `<th style="text-align:right">
-        ${this._e(s.name)}
-      </th>`).join('')}
-    </tr>`;
+    const columns = [
+      { key: 'itemName',  label: '品目',    type: 'text' },
+      { key: 'category',  label: 'カテゴリ', type: 'text' },
+      { key: 'storeName', label: 'スーパー', type: 'text' },
+      { label: '詳細' },
+      { key: 'price',     label: '価格',    type: 'number', align: 'right' },
+    ];
+    this._renderSortableHead(thead, columns);
+    const sortedRows = this._sortRows(rows, columns);
+
     tbody.innerHTML = '';
+    if (sortedRows.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text3)">データがありません</td></tr>`;
+      return;
+    }
 
-    items.forEach(item => {
+    sortedRows.forEach(row => {
+      const sale  = row.isSale ? '<span class="sale-badge">SALE</span>' : '';
+      const valid = row.validDate && row.validDate !== '期間中'
+        ? `<span class="valid-date-badge">${this._e(row.validDate)}</span>` : '';
+      const orig  = row.originalPrice
+        ? `<span style="text-decoration:line-through;color:var(--text3);font-size:12px;margin-right:4px">¥${row.originalPrice.toLocaleString()}</span>`
+        : '';
+      const cls   = row.isMin ? 'best' : row.isSale ? 'sale' : 'normal';
+
       const tr = document.createElement('tr');
-      const storeCells = stores.map(store => {
-        const products = item.stores[store.id];
-        if (!products || products.length === 0) {
-          return `<td class="price-cell"><span class="price-none">—</span></td>`;
-        }
-        // 同じ品目の複数商品を表示
-        const productHtml = products.map(p => {
-          const isMin  = item.minStoreId === store.id && p.price === item.minPrice;
-          const sale   = p.isSale ? '<span class="sale-badge">SALE</span>' : '';
-          const cls    = isMin ? 'best' : p.isSale ? 'sale' : 'normal';
-          const valid  = p.validDate && p.validDate !== '期間中'
-            ? `<span class="valid-date-badge">${this._e(p.validDate)}</span>` : '';
-          return `
-            <div class="product-entry">
-              <div class="product-detail">${this._e(p.detail || p.name)}</div>
-              <div>${orig}<span class="price-tag ${cls}">¥${p.price.toLocaleString()}</span>${sale}${valid}</div>
-            </div>
-          `;
-        }).join('<div class="product-separator"></div>');
-
-        return `<td class="price-cell">${productHtml}</td>`;
-      }).join('');
-
       tr.innerHTML = `
-        <td>
-          <div class="item-name">${this._e(item.itemName)}</div>
-          <span class="item-cat">${this._e(item.category)}</span>
-        </td>
-        ${storeCells}
+        <td><div class="item-name">${this._e(row.itemName)}</div></td>
+        <td><span class="item-cat">${this._e(row.category)}</span></td>
+        <td>${this._e(row.storeName)}</td>
+        <td style="font-size:12px;color:var(--text2)">${this._e(row.detail)}${valid}</td>
+        <td class="price-cell">${orig}<span class="price-tag ${cls}">¥${row.price.toLocaleString()}</span>${sale}</td>
       `;
       tbody.appendChild(tr);
     });
-
-    if (items.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="${stores.length + 1}" style="text-align:center;padding:32px;color:var(--text3)">データがありません</td></tr>`;
-    }
   },
 
   // ══════════════════════════════════════
@@ -414,27 +425,34 @@ const UI = {
       });
     });
 
+    // メダルは「値引き額が大きい順」の元々の順位で固定（表示順のソートとは独立）
     discountRows.sort((a, b) => b.saving - a.saving);
+    discountRows.forEach((row, i) => { row.medal = ['🥇 ', '🥈 ', '🥉 '][i] || ''; });
 
     const thead = document.getElementById('priceTableHead');
     const tbody = document.getElementById('priceTableBody');
 
-    thead.innerHTML = `<tr>
-      <th>品目</th><th>詳細</th><th>スーパー</th>
-      <th style="text-align:right">元値</th>
-      <th style="text-align:right">特売価格</th>
-      <th style="text-align:right">値引き額</th>
-      <th style="text-align:right">値引き率</th>
-    </tr>`;
+    const columns = [
+      { key: 'itemName',      label: '品目',     type: 'text' },
+      { key: 'detail',        label: '詳細',     type: 'text' },
+      { key: 'storeName',     label: 'スーパー',  type: 'text' },
+      { key: 'originalPrice', label: '元値',     type: 'number', align: 'right' },
+      { key: 'price',         label: '特売価格', type: 'number', align: 'right' },
+      { key: 'saving',        label: '値引き額', type: 'number', align: 'right' },
+      { key: 'savingPct',     label: '値引き率', type: 'number', align: 'right' },
+    ];
+    this._renderSortableHead(thead, columns);
+    const sortedRows = this._sortRows(discountRows, columns);
+
     tbody.innerHTML = '';
 
-    if (discountRows.length === 0) {
+    if (sortedRows.length === 0) {
       tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)">値引き情報がありません</td></tr>`;
       return;
     }
 
-    discountRows.forEach((row, i) => {
-      const medal = ['🥇 ','🥈 ','🥉 '][i] || '';
+    sortedRows.forEach(row => {
+      const medal = row.medal;
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td><div class="item-name">${medal}${this._e(row.itemName)}</div><span class="item-cat">${this._e(row.category)}</span></td>
@@ -483,26 +501,29 @@ const UI = {
         });
       });
     });
-    storeItems.sort((a, b) => a.price - b.price);
+    storeItems.sort((a, b) => a.price - b.price); // 既定の表示順（未ソート操作時）
 
     const thead = document.getElementById('priceTableHead');
     const tbody = document.getElementById('priceTableBody');
 
-    thead.innerHTML = `<tr>
-      <th>品目</th>
-      <th>詳細</th>
-      <th style="text-align:right">${this._e(store.name)} の価格</th>
-      <th style="text-align:right">他店最安値</th>
-      <th style="text-align:right">比較</th>
-    </tr>`;
+    const columns = [
+      { key: 'itemName', label: '品目',              type: 'text' },
+      { key: 'detail',   label: '詳細',              type: 'text' },
+      { key: 'price',    label: `${store.name} の価格`, type: 'number', align: 'right' },
+      { key: 'otherMin', label: '他店最安値',          type: 'number', align: 'right' },
+      { label: '比較', align: 'right' },
+    ];
+    this._renderSortableHead(thead, columns);
+    const sortedItems = this._sortRows(storeItems, columns);
+
     tbody.innerHTML = '';
 
-    if (storeItems.length === 0) {
+    if (sortedItems.length === 0) {
       tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text3)">この店舗のデータがありません</td></tr>`;
       return;
     }
 
-    storeItems.forEach(item => {
+    sortedItems.forEach(item => {
       const sale = item.isSale ? '<span class="sale-badge">SALE</span>' : '';
       const valid = item.validDate && item.validDate !== '期間中'
         ? `<span class="valid-date-badge">${this._e(item.validDate)}</span>` : '';
@@ -651,5 +672,42 @@ const UI = {
 
   _e(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  },
+
+  // ── ソート可能なヘッダーを描画（priceTableHead共通） ──
+  _renderSortableHead(theadEl, columns) {
+    theadEl.innerHTML = '<tr>' + columns.map(c => {
+      if (!c.key) return `<th${c.align ? ` style="text-align:${c.align}"` : ''}>${c.label}</th>`;
+      const active = this.sortColumn === c.key;
+      const arrow  = active ? (this.sortAsc ? ' ▲' : ' ▼') : '';
+      const alignStyle = c.align ? `text-align:${c.align};` : '';
+      return `<th data-sort-key="${c.key}" style="${alignStyle}cursor:pointer;user-select:none">${this._e(c.label)}${arrow}</th>`;
+    }).join('') + '</tr>';
+
+    theadEl.querySelectorAll('[data-sort-key]').forEach(th => {
+      th.addEventListener('click', () => {
+        const key = th.dataset.sortKey;
+        if (this.sortColumn === key) {
+          this.sortAsc = !this.sortAsc;
+        } else {
+          this.sortColumn = key;
+          this.sortAsc = true;
+        }
+        this._renderCurrentView();
+      });
+    });
+  },
+
+  _sortRows(rows, columns) {
+    if (!this.sortColumn) return rows;
+    const col = columns.find(c => c.key === this.sortColumn);
+    if (!col) return rows;
+    const sorted = [...rows].sort((a, b) => {
+      if (col.type === 'number') {
+        return (Number(a[this.sortColumn]) || 0) - (Number(b[this.sortColumn]) || 0);
+      }
+      return String(a[this.sortColumn] ?? '').localeCompare(String(b[this.sortColumn] ?? ''), 'ja');
+    });
+    return this.sortAsc ? sorted : sorted.reverse();
   }
 };

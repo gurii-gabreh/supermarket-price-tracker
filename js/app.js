@@ -1111,6 +1111,47 @@ const History = {
     }
   },
 
+  // ── ソート可能なヘッダーを描画（historyTableHead共通） ──
+  sortColumn: null,
+  sortAsc:    true,
+
+  _renderSortableHead(theadEl, columns) {
+    theadEl.innerHTML = '<tr>' + columns.map(c => {
+      const widthStyle = c.width ? `width:${c.width};` : '';
+      if (!c.key) return `<th style="${widthStyle}">${c.label}</th>`;
+      const active = this.sortColumn === c.key;
+      const arrow  = active ? (this.sortAsc ? ' ▲' : ' ▼') : '';
+      const alignStyle = c.align ? `text-align:${c.align};` : '';
+      return `<th data-sort-key="${c.key}" style="${widthStyle}${alignStyle}cursor:pointer;user-select:none">${c.label}${arrow}</th>`;
+    }).join('') + '</tr>';
+
+    theadEl.querySelectorAll('[data-sort-key]').forEach(th => {
+      th.addEventListener('click', () => {
+        const key = th.dataset.sortKey;
+        if (this.sortColumn === key) {
+          this.sortAsc = !this.sortAsc;
+        } else {
+          this.sortColumn = key;
+          this.sortAsc = true;
+        }
+        this._renderResults();
+      });
+    });
+  },
+
+  _sortRows(rows, columns) {
+    if (!this.sortColumn) return rows;
+    const col = columns.find(c => c.key === this.sortColumn);
+    if (!col) return rows;
+    const sorted = [...rows].sort((a, b) => {
+      if (col.type === 'number') {
+        return (Number(a[this.sortColumn]) || 0) - (Number(b[this.sortColumn]) || 0);
+      }
+      return String(a[this.sortColumn] ?? '').localeCompare(String(b[this.sortColumn] ?? ''), 'ja');
+    });
+    return this.sortAsc ? sorted : sorted.reverse();
+  },
+
   // カテゴリアイコンマッピング
   _getCategoryIcon(category) {
     const icons = {
@@ -1160,18 +1201,23 @@ const History = {
     const thead = document.getElementById('historyTableHead');
     if (!tbody || !thead) return;
 
-    thead.innerHTML = `<tr>
-      <th style="width:48px">種別</th><th>品目</th><th>商品名</th>
-      <th>スーパー</th><th>価格</th>
-    </tr>`;
+    const columns = [
+      { label: '種別', width: '48px' },
+      { key: 'itemName',  label: '品目',    type: 'text' },
+      { key: 'name',      label: '商品名',  type: 'text' },
+      { key: 'storeName', label: 'スーパー', type: 'text' },
+      { key: 'price',     label: '価格',    type: 'number', align: 'right' },
+    ];
+    this._renderSortableHead(thead, columns);
+    const sortedItems = this._sortRows(items, columns);
 
     tbody.innerHTML = '';
-    if (items.length === 0) {
+    if (sortedItems.length === 0) {
       tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text3)">データがありません</td></tr>';
       return;
     }
 
-    items.forEach(item => {
+    sortedItems.forEach(item => {
       const tr   = document.createElement('tr');
       tr.style.cursor = 'pointer';
       const icon = this._getCategoryIcon(item.category);
@@ -1286,40 +1332,58 @@ const History = {
       }
     });
 
-    thead.innerHTML = `<tr>
-      <th style="width:48px">種別</th><th>品目</th><th>スーパー</th><th>価格</th><th>詳細</th><th>備考</th>
-    </tr>`;
-
-    tbody.innerHTML = '';
-
-    if (Object.keys(itemMap).length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text3)">データがありません</td></tr>';
-      return;
-    }
-
+    // グループ化はせず、品目×スーパーごとにフラットな行として保持
+    const rows = [];
     Object.keys(itemMap).sort().forEach(itemName => {
       const storeData  = itemMap[itemName];
       const storeNames = Object.keys(storeData);
       const cheapest   = storeNames.reduce((a, b) => storeData[a].price <= storeData[b].price ? a : b);
       const isMulti    = storeNames.length > 1;
 
-      storeNames.sort((a, b) => storeData[a].price - storeData[b].price).forEach((store, idx) => {
-        const tr      = document.createElement('tr');
-        const isCheap = store === cheapest;
-        tr.style.cssText = isCheap && isMulti ? 'background:rgba(166,227,161,0.08)' : '';
-        const catIcon = this._getCategoryIcon(storeData[store].category);
-        tr.innerHTML = `
-          <td style="text-align:center;font-size:18px">${idx === 0 ? catIcon : ''}</td>
-          <td style="font-weight:${idx === 0 ? '600' : '400'}">${idx === 0 ? itemName : ''}</td>
-          <td>${store}</td>
-          <td class="price-cell" style="${isCheap && isMulti ? 'color:#a6e3a1;font-weight:700' : ''}">
-            ¥${Number(storeData[store].price).toLocaleString()}
-          </td>
-          <td style="font-size:12px;color:var(--text3)">${storeData[store].detail}</td>
-          <td>${isCheap && isMulti ? '<span class="sale-badge" style="background:rgba(166,227,161,0.2);color:#a6e3a1">★最安値</span>' : ''}</td>
-        `;
-        tbody.appendChild(tr);
+      storeNames.forEach(store => {
+        rows.push({
+          itemName,
+          category:   storeData[store].category,
+          storeName:  store,
+          price:      storeData[store].price,
+          detail:     storeData[store].detail,
+          isCheapest: isMulti && store === cheapest,
+        });
       });
+    });
+
+    const columns = [
+      { label: '種別', width: '48px' },
+      { key: 'itemName',  label: '品目',    type: 'text' },
+      { key: 'storeName', label: 'スーパー', type: 'text' },
+      { key: 'price',     label: '価格',    type: 'number', align: 'right' },
+      { key: 'detail',    label: '詳細',    type: 'text' },
+      { label: '備考' },
+    ];
+    this._renderSortableHead(thead, columns);
+    const sortedRows = this._sortRows(rows, columns);
+
+    tbody.innerHTML = '';
+    if (sortedRows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text3)">データがありません</td></tr>';
+      return;
+    }
+
+    sortedRows.forEach(row => {
+      const tr = document.createElement('tr');
+      tr.style.cssText = row.isCheapest ? 'background:rgba(166,227,161,0.08)' : '';
+      const catIcon = this._getCategoryIcon(row.category);
+      tr.innerHTML = `
+        <td style="text-align:center;font-size:18px">${catIcon}</td>
+        <td>${row.itemName}</td>
+        <td>${row.storeName}</td>
+        <td class="price-cell" style="${row.isCheapest ? 'color:#a6e3a1;font-weight:700' : ''}">
+          ¥${Number(row.price).toLocaleString()}
+        </td>
+        <td style="font-size:12px;color:var(--text3)">${row.detail}</td>
+        <td>${row.isCheapest ? '<span class="sale-badge" style="background:rgba(166,227,161,0.2);color:#a6e3a1">★最安値</span>' : ''}</td>
+      `;
+      tbody.appendChild(tr);
     });
   },
 };
