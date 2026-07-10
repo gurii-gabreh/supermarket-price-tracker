@@ -220,6 +220,12 @@ const App = {
 
   // ── チラシ収集 ──
   async collectPrices(storesOverride = null) {
+    // 収集中に「収集」「再収集」どちらを押しても多重起動しないようにする
+    if (this._isCollecting) {
+      UI.toast('収集中です。完了までお待ちください', 'info');
+      return;
+    }
+
     const gasUrl = Config.get('gasUrl');
 
     // 対象スーパーを決定
@@ -235,84 +241,90 @@ const App = {
       selected = this.currentStores.filter(s => selectedIds.includes(s.id));
     }
 
-    const btn = document.getElementById('btnCollectPrices');
-    if (btn) btn.disabled = true;
-    UI.showCollecting(selected.length);
-    this.collectedAt = new Date().toISOString();
-    const results    = [];
-    const noChirashi = [];
+    this._isCollecting = true;
+    const btn  = document.getElementById('btnCollectPrices');
+    const btn2 = document.getElementById('btnReCollect');
+    [btn, btn2].forEach(b => { if (b) b.disabled = true; });
 
-    for (let i = 0; i < selected.length; i++) {
-      const store = selected[i];
-      UI.updateCollectingProgress(store.name, i, selected.length);
-      try {
-        const result = DemoMode.isActive()
-          ? { items: await this._demoFetch(store), searchLog: null }
-          : gasUrl
-            ? await Scraper.fetchStorePricesWithLog(store)
-            : { items: await this._demoFetch(store), searchLog: null };
+    try {
+      UI.showCollecting(selected.length);
+      this.collectedAt = new Date().toISOString();
+      const results    = [];
+      const noChirashi = [];
 
-        if (result.items && result.items.geminiError) {
-          UI.hideCollecting();
-          UI.showGeminiError(result.items.errorInfo);
-          if (btn) btn.disabled = false;
-          return;
-        }
+      for (let i = 0; i < selected.length; i++) {
+        const store = selected[i];
+        UI.updateCollectingProgress(store.name, i, selected.length);
+        try {
+          const result = DemoMode.isActive()
+            ? { items: await this._demoFetch(store), searchLog: null }
+            : gasUrl
+              ? await Scraper.fetchStorePricesWithLog(store)
+              : { items: await this._demoFetch(store), searchLog: null };
 
-        // デモモードまたはGAS未設定の場合はチラシなし判定しない
-        const isReal = !DemoMode.isActive() && gasUrl;
-        if (isReal && (!result.items || result.items.length === 0)) {
-          noChirashi.push({ ...store, searchLog: result.searchLog });
-          results.push({ store, items: [], noChirashi: true });
-        } else {
-          results.push({ store, items: result.items || [] });
-          // 部分取得の場合もチラシなし一覧に追加（ただし結果は表示）
-          if (isReal && result.searchLog && result.searchLog.incomplete) {
-            noChirashi.push({ ...store, searchLog: result.searchLog });
+          if (result.items && result.items.geminiError) {
+            UI.hideCollecting();
+            UI.showGeminiError(result.items.errorInfo);
+            return;
           }
+
+          // デモモードまたはGAS未設定の場合はチラシなし判定しない
+          const isReal = !DemoMode.isActive() && gasUrl;
+          if (isReal && (!result.items || result.items.length === 0)) {
+            noChirashi.push({ ...store, searchLog: result.searchLog });
+            results.push({ store, items: [], noChirashi: true });
+          } else {
+            results.push({ store, items: result.items || [] });
+            // 部分取得の場合もチラシなし一覧に追加（ただし結果は表示）
+            if (isReal && result.searchLog && result.searchLog.incomplete) {
+              noChirashi.push({ ...store, searchLog: result.searchLog });
+            }
+          }
+        } catch (e) {
+          console.error(store.name, e);
+          UI.toast(`${store.name}: 収集失敗`, 'error');
+          noChirashi.push(store);
+          results.push({ store, items: [], noChirashi: true });
         }
-      } catch (e) {
-        console.error(store.name, e);
-        UI.toast(`${store.name}: 収集失敗`, 'error');
-        noChirashi.push(store);
-        results.push({ store, items: [], noChirashi: true });
       }
-    }
 
-    UI.updateCollectingProgress('完了', selected.length, selected.length);
-    await new Promise(r => setTimeout(r, 400));
-    UI.hideCollecting();
+      UI.updateCollectingProgress('完了', selected.length, selected.length);
+      await new Promise(r => setTimeout(r, 400));
+      UI.hideCollecting();
 
-    const merged = Scraper.mergeAllPrices(results.filter(r => !r.noChirashi));
-    this.collectedData    = merged;
-    this.collectedStores  = selected;
-    this.noChirashiStores = noChirashi;
+      const merged = Scraper.mergeAllPrices(results.filter(r => !r.noChirashi));
+      this.collectedData    = merged;
+      this.collectedStores  = selected;
+      this.noChirashiStores = noChirashi;
 
-    UI.renderResults(merged, selected, this.collectedAt, noChirashi);
-    if (btn) btn.disabled = false;
+      UI.renderResults(merged, selected, this.collectedAt, noChirashi);
 
-    // スプレッドシートに自動保存
-    if (gasUrl && merged.length > 0) {
-      try {
-        await Scraper.saveToSheet(merged, selected, this.collectedAt);
-        UI.showSaveStatus(true, '✓ Googleスプレッドシートに保存しました');
-        // 最終収集時間を設定に保存
-        Settings.saveLastCollected(this.collectedAt);
-      } catch (e) {
-        console.warn('自動保存失敗:', e);
-        UI.showSaveStatus(false, `✕ スプレッドシートへの保存に失敗しました: ${e.message}`);
+      // スプレッドシートに自動保存
+      if (gasUrl && merged.length > 0) {
+        try {
+          await Scraper.saveToSheet(merged, selected, this.collectedAt);
+          UI.showSaveStatus(true, '✓ Googleスプレッドシートに保存しました');
+          // 最終収集時間を設定に保存
+          Settings.saveLastCollected(this.collectedAt);
+        } catch (e) {
+          console.warn('自動保存失敗:', e);
+          UI.showSaveStatus(false, `✕ スプレッドシートへの保存に失敗しました: ${e.message}`);
+        }
       }
-    }
 
-    const withChirashi = selected.length - noChirashi.length;
-    const demoTag = DemoMode.isActive() ? '🎬 [デモ] ' : '';
-    UI.toast(
-      `${demoTag}${withChirashi}店のチラシから${merged.length}品目を収集${noChirashi.length > 0 ? `（${noChirashi.length}店はチラシなし）` : ''}`,
-      'success', 6000
-    );
-    setTimeout(() => {
-      document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 200);
+      const withChirashi = selected.length - noChirashi.length;
+      const demoTag = DemoMode.isActive() ? '🎬 [デモ] ' : '';
+      UI.toast(
+        `${demoTag}${withChirashi}店のチラシから${merged.length}品目を収集${noChirashi.length > 0 ? `（${noChirashi.length}店はチラシなし）` : ''}`,
+        'success', 6000
+      );
+      setTimeout(() => {
+        document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 200);
+    } finally {
+      this._isCollecting = false;
+      [btn, btn2].forEach(b => { if (b) b.disabled = false; });
+    }
   },
 
   async _demoFetch(store) {
