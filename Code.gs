@@ -9,9 +9,11 @@
  *   GoogleスプレッドシートのIDを設定してください。
  *   スプレッドシートのURLの /d/〇〇〇/edit の〇〇〇部分です。
  *
- * 【10行目】GEMINI_API_KEY
- *   Google AI StudioのAPIキーを設定してください。
- *   https://aistudio.google.com/app/apikey で取得できます。
+ * 【GEMINI_API_KEY】
+ *   このファイルには書きません（Gitで公開してもキーが漏れないようにするため）。
+ *   GASエディタの「プロジェクトの設定」→「スクリプト プロパティ」で
+ *   キー名 GEMINI_API_KEY ・値に Google AI Studio で取得したAPIキー
+ *   （https://aistudio.google.com/app/apikey ）を登録してください。
  *
  * 【11行目】GEMINI_MODEL
  *   使用するGeminiモデルを設定してください。
@@ -22,7 +24,8 @@
  * ===================================================
  */
 const SPREADSHEET_ID = '1VThcmRG6N-Ui-VmSzKdvLI8vOhfovWUqQsZb2rFJ3TY';
-const GEMINI_API_KEY = 'YOUR_GEMINI_API_KEY_HERE'; // Google AI StudioのAPIキーに置き換えてください
+// コードに直接書かず、GASの「スクリプト プロパティ」から読み込む
+const GEMINI_API_KEY = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
 
 const GEMINI_MODEL   = 'gemini-2.5-flash';
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/'
