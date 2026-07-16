@@ -30,6 +30,10 @@ const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/
 
 const SHEET_NAMES = { PRICES: '価格履歴', SUMMARY: 'サマリー', STORES: 'スーパー一覧' };
 
+// Gemini無料枠のRPM（1分あたりリクエスト数）制限に対して余裕を持たせる間隔（ミリ秒）
+// 実際の制限ギリギリだと超過しやすいため、想定より長めに空ける
+const GEMINI_MIN_INTERVAL_MS = 65000;
+
 // ===================================================
 // GETリクエスト処理
 // ===================================================
@@ -663,6 +667,11 @@ function analyzeChirashiImages(imageUrls, storeName) {
   // 1枚ずつ送信
   imageUrls.forEach(function(url, idx) {
     try {
+      // Gemini呼び出しの直前に間隔を空ける（1枚目もスキップしない）。
+      // こうすることで、直前のfindTokubaiUrl()内のGemini呼び出し（トクバイURL検索）
+      // からの間隔も含めて、常にRPM制限に対して十分な余裕を確保できる。
+      Utilities.sleep(GEMINI_MIN_INTERVAL_MS);
+
       Logger.log('画像' + (idx + 1) + '/' + imageUrls.length + '枚目を解析: ' + url.substring(0, 60));
 
       // 画像をBase64に変換
@@ -737,9 +746,6 @@ function analyzeChirashiImages(imageUrls, storeName) {
       Logger.log('(' + (idx + 1) + '枚目) ' + items.length + '品目取得');
       allItems = allItems.concat(items);
       successCount++;
-
-      // レート制限対策: gemini-2.5-flash無料枠10RPM対応（1分1リクエスト）
-      Utilities.sleep(60000);
 
     } catch (e) {
       Logger.log('画像' + (idx + 1) + '枚目エラー: ' + e.message);
@@ -1217,7 +1223,7 @@ function checkChirashiUpdates() {
     var logSheet = ss.getSheetByName('チラシ更新日');
     if (!logSheet) {
       logSheet = ss.insertSheet('チラシ更新日');
-      logSheet.getRange(1, 1, 1, 5).setValues([['店舗名', 'トクバイURL', '前回更新日', '今回更新日', '更新有無']]);
+      logSheet.getRange(1, 1, 1, 5).setValues([['店舗名', 'トクバイURL', '前回チラシID', '今回チラシID', '更新有無']]);
       logSheet.setFrozenRows(1);
     }
 
@@ -1249,11 +1255,22 @@ function checkChirashiUpdates() {
         if (res.getResponseCode() !== 200) return;
         var html = res.getContentText('UTF-8');
 
-        // チラシ更新日を抽出
-        var dateMatch = html.match(/(\d{4})年(\d+)月(\d+)日/);
-        var updateDate = dateMatch
-          ? dateMatch[1] + '-' + parseInt(dateMatch[2]) + '-' + parseInt(dateMatch[3])
-          : '';
+        // チラシ更新の判定：ページ内の最初に見つかった日付文字列（「本日」表示など
+        // チラシの更新と無関係な日付も拾ってしまい、変化がなくても毎回「更新あり」と
+        // 誤判定してしまう）ではなく、掲載されているチラシID（href="…/leaflets/ID"）
+        // の集合が前回と変わったかどうかで判定する。新しいチラシが公開されたときだけ
+        // IDの集合が変化するため、誤検知しない。
+        var leafletIds = [];
+        var seenLeafletId = {};
+        var leafletMatch;
+        var leafletIdPattern = /href="[^"]+\/leaflets\/(\d+)"/gi;
+        while ((leafletMatch = leafletIdPattern.exec(html)) !== null) {
+          if (!seenLeafletId[leafletMatch[1]]) {
+            seenLeafletId[leafletMatch[1]] = true;
+            leafletIds.push(leafletMatch[1]);
+          }
+        }
+        var updateDate = leafletIds.sort().join(',');
 
         var prevDate  = prevDates[storeName] || '';
         var isUpdated = updateDate && updateDate !== prevDate;
