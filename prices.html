@@ -27,6 +27,9 @@
         <button class="nav-btn" id="btnToggleSetup" style="display:none">設定</button>
         <a class="nav-btn highlighted" id="btnOpenSheet" style="display:none" target="_blank" rel="noopener">価格一覧</a>
       </nav>
+      <!-- 携帯幅(@media max-width:640px)でのみ表示されるハンバーガーメニューボタン。
+           2026-09-12、携帯画面でのヘッダー崩れ修正対応(ユーザー指摘)。クリック処理はjs/ui.js UI.initHeaderNav()側。 -->
+      <button class="menu-toggle" id="btnHeaderMenuToggle" type="button" aria-label="メニューを開く" aria-expanded="false">☰</button>
     </div>
   </header>
 

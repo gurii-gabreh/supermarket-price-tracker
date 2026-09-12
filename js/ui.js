@@ -38,6 +38,27 @@ const UI = {
     if (overlay)   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
   },
 
+  // ── ヘッダーナビ(携帯幅ではハンバーガーメニュー化) ──
+  // 2026-09-12、ユーザー指摘「携帯画面でレイアウトが崩れる。メニューは押したときだけ表示にする」対応。
+  // index.html・prices.htmlで共通のjs/ui.jsに実装することで、2ページ分を1箇所の修正で済ませている
+  // (home.htmlの<header>にはnav自体が無いため対象外)。@media(max-width:640px)時のみ見た目に影響する。
+  initHeaderNav() {
+    const toggleBtn = document.getElementById('btnHeaderMenuToggle');
+    const nav        = document.querySelector('.header-nav');
+    if (!toggleBtn || !nav) return; // nav自体が無いページ(home.html)では何もしない
+
+    const closeNav = () => {
+      nav.classList.remove('mobile-open');
+      toggleBtn.setAttribute('aria-expanded', 'false');
+    };
+    toggleBtn.addEventListener('click', () => {
+      const isOpen = nav.classList.toggle('mobile-open');
+      toggleBtn.setAttribute('aria-expanded', String(isOpen));
+    });
+    // 中のnav-btnを押したらドロップダウンを自動で閉じる(委任リスナー、個々のボタンのクリック処理には影響しない)
+    nav.addEventListener('click', e => { if (e.target.closest('.nav-btn')) closeNav(); });
+  },
+
   // ── スーパーカード ──
   renderStores(stores, isDemo = false) {
     this.allStores = stores;

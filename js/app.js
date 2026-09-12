@@ -10,6 +10,7 @@ const App = {
 
   init() {
     UI.initSetupPanel();
+    UI.initHeaderNav(); // 2026-09-12追加: 携帯幅ハンバーガーメニュー(home.htmlは対象外、nav無しのため自動スキップ)
     this._bindEvents();
     this._bindDemoMode();
     this._updateSheetLink();

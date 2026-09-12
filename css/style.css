@@ -88,6 +88,18 @@ body {
 .logo-sub { font-size: 10px; color: var(--text2); letter-spacing: 0.5px; }
 
 .header-nav { display: flex; gap: 8px; align-items: center; }
+
+/* ハンバーガーメニューボタン: PC幅では常にdisplay:noneのまま(@media内でのみ表示する)。
+   2026-09-12、携帯画面でのヘッダー崩れ修正の一環として追加(ユーザー指摘)。 */
+.menu-toggle {
+  display: none; flex-shrink: 0;
+  align-items: center; justify-content: center;
+  width: 36px; height: 36px;
+  background: rgba(255,255,255,0.05); border: 1px solid var(--border2);
+  color: var(--text); border-radius: var(--radius-sm);
+  font-size: 18px; line-height: 1; cursor: pointer;
+}
+.menu-toggle:hover { background: rgba(255,255,255,0.1); }
 .nav-btn {
   display: flex; align-items: center; gap: 6px;
   background: rgba(255,255,255,0.05); border: 1px solid var(--border2);
@@ -443,6 +455,22 @@ body {
   .search-btn { width: 100%; justify-content: center; }
   .section-header { flex-direction: column; align-items: flex-start; }
   .stores-grid { grid-template-columns: 1fr; }
+
+  /* ── ヘッダーナビ(.header-nav)を携帯幅では「押したときだけ表示」のドロップダウンにする ──
+     2026-09-12、ユーザー指摘(携帯画面でレイアウトが崩れる→メニューは押したときだけ表示に)対応。
+     study-appで実績のあるハンバーガーメニュー方式を移植。
+     .header(position:sticky)が絶対配置の基準になるため、.header-nav側で position:absolute; top:100% を指定。 */
+  .menu-toggle { display: flex; }
+  .header-nav { display: none !important; }
+  .header-nav.mobile-open {
+    display: flex !important; flex-direction: column; align-items: stretch;
+    position: absolute; top: 100%; left: 0; right: 0;
+    background: rgba(8,12,16,0.97);
+    backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px 14px; gap: 8px; z-index: 150;
+  }
+  .header-nav.mobile-open .nav-btn { width: 100%; justify-content: flex-start; }
 }
 
 /* ══════════════════════════════
